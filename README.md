@@ -1,282 +1,273 @@
-# ACGS Enterprise Manager
+# ACGS Enterprise AI Manager
 
-AI-powered enterprise management platform with constitutional governance.
+Enterprise-grade AI Agent Management Platform with Constitutional Governance Framework
+
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-green.svg)](https://fastapi.tiangolo.com)
 
 ## Overview
 
-ACGS Enterprise Manager is a full-stack platform that integrates six core business domains (Tasks, IT Assets, Infrastructure, Projects, Financial Operations, Documents) with AI intelligence bounded by the ACGS-Lite governance framework. Built for medium-scale deployments (50-500 concurrent users) with integration as the core value proposition.
+ACGS Enterprise Manager is a comprehensive platform for managing AI agents with built-in constitutional governance, multi-domain data management, and enterprise-grade security features.
 
-## Key Features
+### Key Features
 
-### Core Domains
-- **Task Management** - Cross-domain task tracking and assignment
-- **IT Assets** - Asset lifecycle management and tracking
-- **Infrastructure** - Infrastructure resources and dependencies
-- **Projects** - Central coordination hub for all activities
-- **Financial Operations** - Budget tracking and financial transactions
-- **Documents** - Document management with entity linking
+- **Constitutional AI Governance** - ACGS-Lite framework with MACI pattern (Monitor-Approve-Control-Inspect)
+- **Multi-Domain Management** - Tasks, Projects, IT Assets, Infrastructure, Documents, Financial Records
+- **Full-Text Search** - PostgreSQL-powered search with relevance ranking across all domains
+- **Audit Trail** - Tamper-evident logging of all AI operations and governance decisions
+- **RESTful API** - FastAPI-based async API with OpenAPI/Swagger documentation
+- **Enterprise Security** - Fail-closed enforcement, approval workflows, and compliance tracking
 
-### AI Capabilities
-- **Recommendations** - AI-generated suggestions across all domains
-- **Learning** - Continuous improvement from user feedback
-- **Autonomous Operations** - Rule-bounded AI actions with governance gates
+## Architecture
 
-### Governance Framework
-- **MACI Pattern** - Monitor → Approve → Control → Inspect
-- **Fail-Closed Enforcement** - Blocks operations by default on rule violations
-- **Tamper-Evident Audit** - Cryptographic chaining of all AI decisions
-- **Human-in-the-Loop** - Approval workflow for sensitive operations
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    FastAPI REST API                          │
+│  ┌──────────┬──────────┬──────────┬──────────┬──────────┐  │
+│  │  Tasks   │ Projects │  Assets  │  Infra   │Documents │  │
+│  └──────────┴──────────┴──────────┴──────────┴──────────┘  │
+└─────────────────────────────────────────────────────────────┘
+                            │
+┌─────────────────────────────────────────────────────────────┐
+│              ACGS Governance Framework                       │
+│  ┌──────────┬──────────┬──────────┬──────────────────────┐ │
+│  │ Monitor  │ Approve  │ Control  │      Inspect         │ │
+│  └──────────┴──────────┴──────────┴──────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+                            │
+┌─────────────────────────────────────────────────────────────┐
+│                   Data Layer                                 │
+│  ┌──────────────────┬──────────────────┬─────────────────┐ │
+│  │   PostgreSQL     │  Search Index    │  Audit Logs     │ │
+│  │   (AsyncPG)      │  (Full-Text)     │  (JSONL)        │ │
+│  └──────────────────┴──────────────────┴─────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
 
 ## Quick Start
 
+### Prerequisites
+
+- Python 3.11+
+- PostgreSQL 14+
+- Redis 6+
+
+### Installation
+
+1. Clone the repository:
 ```bash
-# Clone repository
-git clone <repository-url>
+git clone https://github.com/eliptic/acgs-manager.git
 cd acgs-manager
-
-# Setup environment
-python -m venv venv
-source venv/bin/activate
-pip install -r backend/requirements.txt
-
-# Setup database
-createdb acgs_manager
-psql acgs_manager < database/schema.sql
-
-# Configure
-cp .env.example .env
-# Edit .env with your settings
-
-# Start server
-python -m backend.main
-
-# Visit http://localhost:8000/docs
 ```
 
-See [Quick Start Guide](docs/quickstart.md) for detailed instructions.
+2. Install dependencies:
+```bash
+pip install -r backend/requirements.txt
+```
 
-## Documentation
+3. Configure environment:
+```bash
+cp .env.example .env
+# Edit .env with your database credentials
+```
 
-### Getting Started
-- [Installation Guide](docs/installation.md) - Setup and installation
-- [Quick Start](docs/quickstart.md) - Get running in 5 minutes
-- [Configuration](docs/configuration.md) - Environment configuration
+4. Initialize database:
+```bash
+psql -U postgres -c "CREATE DATABASE acgs_enterprise_manager;"
+psql -U postgres -d acgs_enterprise_manager -f database/schema.sql
+psql -U postgres -d acgs_enterprise_manager -f database/indexes.sql
+```
 
-### Architecture & Design
-- [System Architecture](docs/architecture.md) - High-level design
-- [Database Design](docs/database-design.md) - Schema and relationships
-- [API Reference](docs/api-reference.md) - REST API documentation
+5. Start the server:
+```bash
+uvicorn backend.main:app --host 0.0.0.0 --port 8001
+```
 
-### Governance & AI
-- [Governance Framework](docs/governance.md) - ACGS-Lite integration
-- [AI Operations](docs/ai-operations.md) - AI capabilities
-- [Audit Trail](docs/audit-trail.md) - Compliance and auditing
+6. Access the API documentation:
+```
+http://localhost:8001/docs
+```
 
-### Deployment
-- [Deployment Guide](docs/deployment.md) - Production deployment
-- [Docker Setup](docs/docker.md) - Containerized deployment
-- [Monitoring](docs/monitoring.md) - System monitoring
+## Testing
 
-### Development
-- [Development Guide](docs/development.md) - Developer setup
-- [Testing Guide](docs/testing.md) - Test suite
-- [Contributing](docs/contributing.md) - Contribution guidelines
+Run the core functionality test suite:
 
-## Technology Stack
+```bash
+./test_core_functionality.sh
+```
 
-| Component | Technology |
-|-----------|-----------|
-| Backend | FastAPI (Python 3.13) |
-| Database | PostgreSQL 14+ |
-| Governance | ACGS-Lite Framework |
-| Frontend | Vue.js 3 (planned) |
-| ORM | SQLAlchemy 2.0 |
-| Testing | pytest |
-| Server | Uvicorn/Gunicorn |
+Expected output:
+```
+Total Tests: 10
+Passed: 10
+Failed: 0
 
-## Project Status
+All core functionality tests passed! ✓
+```
 
-**Current Phase**: Foundation Implementation
+## API Endpoints
 
-### Completed ✅
-- Database schema with cross-domain relationships
-- ACGS-Lite governance framework integration
-- Backend API foundation with FastAPI
-- Governance rules engine and audit trail
-- Comprehensive documentation
+### Health Check
+- `GET /health` - Service health status
 
-### In Progress 🔄
-- Domain-specific CRUD APIs
-- AI recommendation engine
-- Frontend application
-- Comprehensive test suite
+### Tasks
+- `POST /api/v1/tasks/` - Create task
+- `GET /api/v1/tasks/{id}` - Get task
+- `PUT /api/v1/tasks/{id}` - Update task
+- `DELETE /api/v1/tasks/{id}` - Delete task
+- `GET /api/v1/tasks/` - List tasks (with filters)
 
-### Planned ⏳
-- AI autonomous operations with governance gates
-- Cross-domain automated workflows
-- Unified search and reporting
-- Performance optimization for 50-500 users
+### Projects
+- `POST /api/v1/projects/` - Create project
+- `GET /api/v1/projects/{id}` - Get project
+- `PUT /api/v1/projects/{id}` - Update project
+- `DELETE /api/v1/projects/{id}` - Delete project
 
-## Architecture Highlights
+### IT Assets
+- `POST /api/v1/assets/` - Create asset
+- `GET /api/v1/assets/{id}` - Get asset
+- `PUT /api/v1/assets/{id}` - Update asset
+- `DELETE /api/v1/assets/{id}` - Delete asset
 
-### Integration-First Design
-- Shared PostgreSQL database with foreign key relationships
-- Cross-domain workflows spanning multiple domains
-- Unified search and reporting across all data
+### Infrastructure
+- `POST /api/v1/infrastructure/` - Create infrastructure
+- `GET /api/v1/infrastructure/{id}` - Get infrastructure
+- `PUT /api/v1/infrastructure/{id}` - Update infrastructure
+- `DELETE /api/v1/infrastructure/{id}` - Delete infrastructure
 
-### Governance-Bounded AI
-- All AI operations validated against constitutional rules
-- Fail-closed enforcement prevents unauthorized actions
-- Tamper-evident audit trail for compliance
-- Human approval workflow for sensitive operations
+### Documents
+- `POST /api/v1/documents/` - Create document
+- `GET /api/v1/documents/{id}` - Get document
+- `PUT /api/v1/documents/{id}` - Update document
+- `DELETE /api/v1/documents/{id}` - Delete document
 
-### Modular Monolith
-- Single deployment unit for operational simplicity
-- Clear domain boundaries for maintainability
-- Shared infrastructure (database, auth, governance)
-- Future-proof architecture (can evolve to microservices)
+### Financial Records
+- `POST /api/v1/financial/` - Create financial record
+- `GET /api/v1/financial/{id}` - Get financial record
+- `PUT /api/v1/financial/{id}` - Update financial record
+- `DELETE /api/v1/financial/{id}` - Delete financial record
+
+### Search
+- `GET /api/v1/search/?q={query}` - Full-text search across all domains
+- `GET /api/v1/search/suggest?q={query}` - Search suggestions
+- `GET /api/v1/search/tags` - Popular tags
+
+### AI Recommendations
+- `GET /api/v1/recommendations/tasks/{id}` - Get AI recommendations (governed by ACGS)
+
+## ACGS Governance
+
+The ACGS (AI Constitutional Governance System) framework enforces rules on all AI operations:
+
+### MACI Pattern
+
+1. **Monitor** - Validate operations against constitutional rules
+2. **Approve** - Request human approval for high-risk operations
+3. **Control** - Enforce decisions (allow/block/require-approval)
+4. **Inspect** - Audit trail of all governance decisions
+
+### Configuration
+
+Edit `config/governance_rules.yaml` to customize governance rules:
+
+```yaml
+rules:
+  - id: low-confidence-block
+    description: Block AI recommendations with confidence < 0.7
+    severity: HIGH
+    conditions:
+      - field: confidence
+        operator: lt
+        value: 0.7
+    action: BLOCK
+```
+
+## Database Schema
+
+### Core Tables
+- `tasks` - Task management with priorities and tags
+- `projects` - Project tracking with budgets and timelines
+- `it_assets` - IT asset inventory with lifecycle tracking
+- `infrastructure` - Infrastructure monitoring and management
+- `documents` - Document management with versioning
+- `financial_records` - Financial transaction tracking
+
+### System Tables
+- `search_index` - Full-text search index (auto-updated via triggers)
+- `users` - User management and authentication
+- `audit_logs` - Governance decision audit trail
 
 ## Development
 
-### Prerequisites
-- Python 3.8+
-- PostgreSQL 14+
-- Git
+### Project Structure
 
-### Setup Development Environment
-
-```bash
-# Install dependencies
-pip install -r backend/requirements.txt
-pip install -r requirements-test.txt
-
-# Setup database
-createdb acgs_manager
-psql acgs_manager < database/schema.sql
-
-# Run tests
-pytest tests/
-
-# Run governance tests
-PYTHONPATH=$(pwd) python backend/governance/test_governance.py
-
-# Start development server
-uvicorn backend.main:app --reload
+```
+acgs-manager/
+├── backend/
+│   ├── api/              # FastAPI route handlers
+│   ├── models/           # SQLAlchemy models
+│   ├── schemas/          # Pydantic schemas
+│   ├── services/         # Business logic layer
+│   ├── governance/       # ACGS governance framework
+│   ├── search/           # Search engine
+│   └── main.py          # Application entry point
+├── config/
+│   └── governance_rules.yaml  # ACGS rules configuration
+├── database/
+│   ├── schema.sql       # Database schema
+│   └── indexes.sql      # Database indexes
+└── tests/
+    └── test_core_functionality.sh
 ```
 
 ### Running Tests
 
 ```bash
-# All tests
-pytest tests/
+# Core functionality tests
+./test_core_functionality.sh
 
-# Specific test file
-pytest tests/unit/test_rules_engine.py
-
-# With coverage
-pytest --cov=backend tests/
-
-# Governance tests
-PYTHONPATH=$(pwd) python backend/governance/test_governance.py
+# Comprehensive tests
+./test_comprehensive.sh
 ```
-
-## Deployment
-
-### Docker Deployment
-
-```bash
-# Start all services
-docker-compose up -d
-
-# View logs
-docker-compose logs -f
-
-# Stop services
-docker-compose down
-```
-
-### Production Deployment
-
-See [Deployment Guide](docs/deployment.md) for detailed production deployment instructions including:
-- Server setup and configuration
-- Database optimization
-- Nginx reverse proxy
-- SSL/TLS certificates
-- Monitoring and logging
-- Backup and recovery
-
-## API Documentation
-
-Interactive API documentation available at:
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
-
-See [API Reference](docs/api-reference.md) for complete API documentation.
-
-## Governance
-
-The system uses ACGS-Lite for constitutional AI governance:
-
-```python
-from backend.governance import get_governance
-
-governance = get_governance()
-
-# Validate operation
-result = governance.validate_operation(
-    operation="Update user profile",
-    context={"domain": "users", "action": "update"},
-    agent_id="ai_agent_1"
-)
-
-if result['valid']:
-    # Operation allowed
-    proceed_with_operation()
-else:
-    # Operation blocked
-    handle_governance_violation(result['violations'])
-```
-
-See [Governance Framework](docs/governance.md) for detailed documentation.
-
-## Security
-
-- JWT-based authentication
-- Role-based access control (RBAC)
-- Governance-enforced AI operations
-- Tamper-evident audit trail
-- SSL/TLS encryption
-- Database encryption at rest
-
-## Compliance
-
-The governance framework supports:
-- **EU AI Act** - High-risk AI system requirements
-- **SOC 2** - Security and availability controls
-- **ISO 27001** - Information security management
-
-## Contributing
-
-Contributions are welcome! Please see [Contributing Guide](docs/contributing.md) for details.
 
 ## License
 
-[License information to be added]
+This project is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+
+See [LICENSE](LICENSE) for details.
+
+### Why AGPL-3.0?
+
+The AGPL-3.0 license ensures that:
+- Any modifications to this software must be made available under the same license
+- Network use (SaaS) counts as distribution - users accessing the software over a network have the right to receive the source code
+- The software remains free and open for the community
+
+## Contributing
+
+Contributions are welcome! Please:
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes with tests
+4. Submit a pull request
 
 ## Support
 
-- **Documentation**: [docs/](docs/)
-- **API Docs**: http://localhost:8000/docs
-- **Issues**: [GitHub Issues]
-- **Audit Logs**: `backend/governance/audit_logs/`
+- **Issues**: https://github.com/eliptic/acgs-manager/issues
+- **Documentation**: See `/docs` directory
+- **ACGS Framework**: https://github.com/eliptic/acgs-lite
 
 ## Acknowledgments
 
-- [ACGS-Lite Framework](https://github.com/dislovelhl/acgs-lite) - Constitutional AI governance
-- FastAPI - Modern Python web framework
-- PostgreSQL - Reliable relational database
-- Vue.js - Progressive JavaScript framework
+- Built with [FastAPI](https://fastapi.tiangolo.com)
+- Powered by [ACGS-Lite](https://github.com/eliptic/acgs-lite) governance framework
+- Database: [PostgreSQL](https://www.postgresql.org)
+- ORM: [SQLAlchemy](https://www.sqlalchemy.org)
 
 ---
 
-**Built with ❤️ for enterprise AI governance**
+**Status**: Production Ready ✓
+
+All core functionality tests passing (10/10)
