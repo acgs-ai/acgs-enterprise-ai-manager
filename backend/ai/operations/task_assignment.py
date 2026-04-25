@@ -23,9 +23,7 @@ class TaskAssignmentHandler:
         logger.info(f"{self.name} initialized")
 
     async def execute(
-        self,
-        details: Dict[str, Any],
-        context: Dict[str, Any]
+        self, details: Dict[str, Any], context: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
         Execute autonomous task assignment.
@@ -37,8 +35,8 @@ class TaskAssignmentHandler:
         Returns:
             Dict containing assignment result
         """
-        task_id = details.get('task_id')
-        candidate_members = details.get('candidate_members', [])
+        task_id = details.get("task_id")
+        candidate_members = details.get("candidate_members", [])
 
         if not task_id:
             raise ValueError("task_id is required")
@@ -61,8 +59,8 @@ class TaskAssignmentHandler:
             skill_weight = 0.4
 
             combined_scores[member_id] = (
-                workload_scores.get(member_id, 0) * workload_weight +
-                skill_scores.get(member_id, 0) * skill_weight
+                workload_scores.get(member_id, 0) * workload_weight
+                + skill_scores.get(member_id, 0) * skill_weight
             )
 
         # Select best candidate
@@ -72,27 +70,21 @@ class TaskAssignmentHandler:
 
         # Prepare assignment result
         result = {
-            'task_id': task_id,
-            'assigned_to': assigned_member_id,
-            'confidence': assignment_confidence,
-            'assigned_at': datetime.utcnow().isoformat(),
-            'reasoning': self._generate_reasoning(
-                assigned_member_id,
-                workload_scores,
-                skill_scores,
-                combined_scores
+            "task_id": task_id,
+            "assigned_to": assigned_member_id,
+            "confidence": assignment_confidence,
+            "assigned_at": datetime.utcnow().isoformat(),
+            "reasoning": self._generate_reasoning(
+                assigned_member_id, workload_scores, skill_scores, combined_scores
             ),
-            'alternative_candidates': [
-                {
-                    'member_id': member_id,
-                    'score': score
-                }
+            "alternative_candidates": [
+                {"member_id": member_id, "score": score}
                 for member_id, score in sorted(
-                    combined_scores.items(),
-                    key=lambda x: x[1],
-                    reverse=True
-                )[1:4]  # Top 3 alternatives
-            ]
+                    combined_scores.items(), key=lambda x: x[1], reverse=True
+                )[
+                    1:4
+                ]  # Top 3 alternatives
+            ],
         }
 
         logger.info(
@@ -103,9 +95,7 @@ class TaskAssignmentHandler:
         return result
 
     def _analyze_workload(
-        self,
-        candidate_members: List[str],
-        context: Dict[str, Any]
+        self, candidate_members: List[str], context: Dict[str, Any]
     ) -> Dict[str, float]:
         """
         Analyze workload for each candidate member.
@@ -117,16 +107,16 @@ class TaskAssignmentHandler:
         Returns:
             Dict mapping member_id to workload score (0-1, higher is better)
         """
-        workload_data = context.get('workload_data', {})
+        workload_data = context.get("workload_data", {})
         scores = {}
 
         for member_id in candidate_members:
             member_workload = workload_data.get(member_id, {})
 
             # Factors: active tasks, upcoming deadlines, capacity
-            active_tasks = member_workload.get('active_tasks', 0)
-            capacity = member_workload.get('capacity', 10)
-            urgent_tasks = member_workload.get('urgent_tasks', 0)
+            active_tasks = member_workload.get("active_tasks", 0)
+            capacity = member_workload.get("capacity", 10)
+            urgent_tasks = member_workload.get("urgent_tasks", 0)
 
             # Calculate workload score (inverse of utilization)
             utilization = (active_tasks + urgent_tasks * 1.5) / capacity
@@ -137,9 +127,7 @@ class TaskAssignmentHandler:
         return scores
 
     def _analyze_skills(
-        self,
-        candidate_members: List[str],
-        context: Dict[str, Any]
+        self, candidate_members: List[str], context: Dict[str, Any]
     ) -> Dict[str, float]:
         """
         Analyze skill match for each candidate member.
@@ -151,8 +139,8 @@ class TaskAssignmentHandler:
         Returns:
             Dict mapping member_id to skill score (0-1, higher is better)
         """
-        required_skills = context.get('required_skills', [])
-        member_skills = context.get('member_skills', {})
+        required_skills = context.get("required_skills", [])
+        member_skills = context.get("member_skills", {})
 
         if not required_skills:
             # No specific skills required, all members equal
@@ -165,7 +153,9 @@ class TaskAssignmentHandler:
 
             # Calculate skill match percentage
             matched_skills = len(set(required_skills) & set(skills))
-            skill_score = matched_skills / len(required_skills) if required_skills else 0.5
+            skill_score = (
+                matched_skills / len(required_skills) if required_skills else 0.5
+            )
 
             scores[member_id] = skill_score
 
@@ -176,7 +166,7 @@ class TaskAssignmentHandler:
         assigned_member_id: str,
         workload_scores: Dict[str, float],
         skill_scores: Dict[str, float],
-        combined_scores: Dict[str, float]
+        combined_scores: Dict[str, float],
     ) -> str:
         """
         Generate human-readable reasoning for assignment decision.
@@ -201,21 +191,23 @@ class TaskAssignmentHandler:
         if workload > 0.7:
             reasoning_parts.append(f"Member has low workload (score: {workload:.2f}).")
         elif workload < 0.3:
-            reasoning_parts.append(f"Member has high workload but best available (score: {workload:.2f}).")
+            reasoning_parts.append(
+                f"Member has high workload but best available (score: {workload:.2f})."
+            )
 
         if skill > 0.8:
             reasoning_parts.append(f"Strong skill match (score: {skill:.2f}).")
         elif skill > 0.5:
             reasoning_parts.append(f"Adequate skill match (score: {skill:.2f}).")
         else:
-            reasoning_parts.append(f"Limited skill match but best available (score: {skill:.2f}).")
+            reasoning_parts.append(
+                f"Limited skill match but best available (score: {skill:.2f})."
+            )
 
         return " ".join(reasoning_parts)
 
     async def validate(
-        self,
-        details: Dict[str, Any],
-        context: Dict[str, Any]
+        self, details: Dict[str, Any], context: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
         Validate task assignment parameters before execution.
@@ -229,15 +221,12 @@ class TaskAssignmentHandler:
         """
         errors = []
 
-        if not details.get('task_id'):
+        if not details.get("task_id"):
             errors.append("task_id is required")
 
-        if not details.get('candidate_members'):
+        if not details.get("candidate_members"):
             errors.append("candidate_members list is required")
-        elif len(details.get('candidate_members', [])) == 0:
+        elif len(details.get("candidate_members", [])) == 0:
             errors.append("candidate_members list cannot be empty")
 
-        return {
-            'valid': len(errors) == 0,
-            'errors': errors
-        }
+        return {"valid": len(errors) == 0, "errors": errors}

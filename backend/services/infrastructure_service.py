@@ -9,14 +9,20 @@ from typing import Optional, List
 from uuid import UUID
 
 from backend.models.infrastructure import Infrastructure
-from backend.schemas.infrastructure import InfrastructureCreate, InfrastructureUpdate, InfrastructureFilter
+from backend.schemas.infrastructure import (
+    InfrastructureCreate,
+    InfrastructureUpdate,
+    InfrastructureFilter,
+)
 
 
 class InfrastructureService:
     """Service class for Infrastructure business logic."""
 
     @staticmethod
-    async def create_infrastructure(db: AsyncSession, infra_data: InfrastructureCreate) -> Infrastructure:
+    async def create_infrastructure(
+        db: AsyncSession, infra_data: InfrastructureCreate
+    ) -> Infrastructure:
         """Create a new infrastructure."""
         infra = Infrastructure(**infra_data.model_dump())
         db.add(infra)
@@ -25,9 +31,13 @@ class InfrastructureService:
         return infra
 
     @staticmethod
-    async def get_infrastructure(db: AsyncSession, infra_id: UUID) -> Optional[Infrastructure]:
+    async def get_infrastructure(
+        db: AsyncSession, infra_id: UUID
+    ) -> Optional[Infrastructure]:
         """Get infrastructure by ID."""
-        result = await db.execute(select(Infrastructure).where(Infrastructure.id == infra_id))
+        result = await db.execute(
+            select(Infrastructure).where(Infrastructure.id == infra_id)
+        )
         return result.scalar_one_or_none()
 
     @staticmethod
@@ -35,7 +45,7 @@ class InfrastructureService:
         db: AsyncSession,
         filters: Optional[InfrastructureFilter] = None,
         page: int = 1,
-        page_size: int = 50
+        page_size: int = 50,
     ) -> tuple[List[Infrastructure], int]:
         """List infrastructure with filtering and pagination."""
         query = select(Infrastructure)
@@ -47,7 +57,9 @@ class InfrastructureService:
             if filters.status:
                 conditions.append(Infrastructure.status == filters.status)
             if filters.location:
-                conditions.append(Infrastructure.location.ilike(f"%{filters.location}%"))
+                conditions.append(
+                    Infrastructure.location.ilike(f"%{filters.location}%")
+                )
             if filters.search:
                 search_term = f"%{filters.search}%"
                 conditions.append(Infrastructure.name.ilike(search_term))
@@ -67,9 +79,7 @@ class InfrastructureService:
 
     @staticmethod
     async def update_infrastructure(
-        db: AsyncSession,
-        infra_id: UUID,
-        infra_data: InfrastructureUpdate
+        db: AsyncSession, infra_id: UUID, infra_data: InfrastructureUpdate
     ) -> Optional[Infrastructure]:
         """Update infrastructure."""
         infra = await InfrastructureService.get_infrastructure(db, infra_id)

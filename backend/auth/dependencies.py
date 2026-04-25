@@ -79,7 +79,9 @@ def decode_access_token(token: str) -> dict:
         )
 
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+) -> dict:
     """
     Dependency to get the current authenticated user from JWT token.
 
@@ -116,6 +118,7 @@ def require_role(required_role: str):
         async def admin_route(user: dict = Depends(require_role("admin"))):
             return {"message": "Admin access granted"}
     """
+
     async def role_checker(user: dict = Depends(get_current_user)) -> dict:
         user_role = user.get("role", "user")
 

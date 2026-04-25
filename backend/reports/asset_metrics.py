@@ -21,7 +21,7 @@ class AssetMetrics:
     async def get_utilization_rate(
         db: AsyncSession,
         start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None
+        end_date: Optional[datetime] = None,
     ) -> Dict[str, Any]:
         """
         Calculate asset utilization rate.
@@ -51,8 +51,7 @@ class AssetMetrics:
         # Get assets by status
         status_filters = filters.copy()
         status_query = select(
-            Asset.status,
-            func.count(Asset.id).label('count')
+            Asset.status, func.count(Asset.id).label("count")
         ).group_by(Asset.status)
 
         if status_filters:
@@ -64,22 +63,20 @@ class AssetMetrics:
         status_counts = {row.status: row.count for row in rows}
 
         # Calculate utilization (in_use / total)
-        in_use = status_counts.get('in_use', 0)
+        in_use = status_counts.get("in_use", 0)
         utilization_rate = (in_use / total_assets * 100) if total_assets > 0 else 0
 
         return {
-            'total_assets': total_assets,
-            'in_use': in_use,
-            'available': status_counts.get('available', 0),
-            'maintenance': status_counts.get('maintenance', 0),
-            'retired': status_counts.get('retired', 0),
-            'utilization_rate': round(utilization_rate, 2)
+            "total_assets": total_assets,
+            "in_use": in_use,
+            "available": status_counts.get("available", 0),
+            "maintenance": status_counts.get("maintenance", 0),
+            "retired": status_counts.get("retired", 0),
+            "utilization_rate": round(utilization_rate, 2),
         }
 
     @staticmethod
-    async def get_lifecycle_distribution(
-        db: AsyncSession
-    ) -> Dict[str, Any]:
+    async def get_lifecycle_distribution(db: AsyncSession) -> Dict[str, Any]:
         """
         Get distribution of assets by lifecycle stage.
 
@@ -90,8 +87,7 @@ class AssetMetrics:
             Dict with lifecycle distribution
         """
         query = select(
-            Asset.lifecycle_stage,
-            func.count(Asset.id).label('count')
+            Asset.lifecycle_stage, func.count(Asset.id).label("count")
         ).group_by(Asset.lifecycle_stage)
 
         result = await db.execute(query)
@@ -99,15 +95,10 @@ class AssetMetrics:
 
         distribution = {row.lifecycle_stage: row.count for row in rows}
 
-        return {
-            'distribution': distribution,
-            'total': sum(distribution.values())
-        }
+        return {"distribution": distribution, "total": sum(distribution.values())}
 
     @staticmethod
-    async def get_category_distribution(
-        db: AsyncSession
-    ) -> Dict[str, Any]:
+    async def get_category_distribution(db: AsyncSession) -> Dict[str, Any]:
         """
         Get distribution of assets by category.
 
@@ -117,25 +108,20 @@ class AssetMetrics:
         Returns:
             Dict with category distribution
         """
-        query = select(
-            Asset.category,
-            func.count(Asset.id).label('count')
-        ).group_by(Asset.category)
+        query = select(Asset.category, func.count(Asset.id).label("count")).group_by(
+            Asset.category
+        )
 
         result = await db.execute(query)
         rows = result.all()
 
         distribution = {row.category: row.count for row in rows}
 
-        return {
-            'distribution': distribution,
-            'total': sum(distribution.values())
-        }
+        return {"distribution": distribution, "total": sum(distribution.values())}
 
     @staticmethod
     async def get_maintenance_metrics(
-        db: AsyncSession,
-        days: int = 30
+        db: AsyncSession, days: int = 30
     ) -> Dict[str, Any]:
         """
         Get asset maintenance metrics.
@@ -152,7 +138,7 @@ class AssetMetrics:
 
         # Assets in maintenance
         maintenance_query = select(func.count(Asset.id)).where(
-            Asset.status == 'maintenance'
+            Asset.status == "maintenance"
         )
 
         result = await db.execute(maintenance_query)
@@ -162,7 +148,7 @@ class AssetMetrics:
         needs_maintenance_query = select(func.count(Asset.id)).where(
             and_(
                 Asset.last_maintenance_date < (now - timedelta(days=90)),
-                Asset.status != 'retired'
+                Asset.status != "retired",
             )
         )
 
@@ -170,15 +156,13 @@ class AssetMetrics:
         needs_maintenance = result.scalar() or 0
 
         return {
-            'in_maintenance': in_maintenance,
-            'needs_maintenance': needs_maintenance,
-            'period_days': days
+            "in_maintenance": in_maintenance,
+            "needs_maintenance": needs_maintenance,
+            "period_days": days,
         }
 
     @staticmethod
-    async def get_value_metrics(
-        db: AsyncSession
-    ) -> Dict[str, Any]:
+    async def get_value_metrics(db: AsyncSession) -> Dict[str, Any]:
         """
         Get asset value metrics.
 
@@ -190,32 +174,28 @@ class AssetMetrics:
         """
         # Total asset value
         total_value_query = select(
-            func.sum(Asset.purchase_price).label('total_value')
-        ).where(Asset.status != 'retired')
+            func.sum(Asset.purchase_price).label("total_value")
+        ).where(Asset.status != "retired")
 
         result = await db.execute(total_value_query)
         total_value = result.scalar() or 0
 
         # Value by category
-        category_value_query = select(
-            Asset.category,
-            func.sum(Asset.purchase_price).label('value')
-        ).where(Asset.status != 'retired').group_by(Asset.category)
+        category_value_query = (
+            select(Asset.category, func.sum(Asset.purchase_price).label("value"))
+            .where(Asset.status != "retired")
+            .group_by(Asset.category)
+        )
 
         result = await db.execute(category_value_query)
         rows = result.all()
 
         by_category = {row.category: float(row.value or 0) for row in rows}
 
-        return {
-            'total_value': float(total_value),
-            'by_category': by_category
-        }
+        return {"total_value": float(total_value), "by_category": by_category}
 
     @staticmethod
-    async def get_age_distribution(
-        db: AsyncSession
-    ) -> Dict[str, Any]:
+    async def get_age_distribution(db: AsyncSession) -> Dict[str, Any]:
         """
         Get distribution of assets by age.
 
@@ -228,31 +208,43 @@ class AssetMetrics:
         now = datetime.utcnow()
 
         # Calculate age in days and categorize
-        query = select(
-            case(
-                (func.extract('days', now - Asset.acquisition_date) < 365, '0-1 years'),
-                (func.extract('days', now - Asset.acquisition_date) < 730, '1-2 years'),
-                (func.extract('days', now - Asset.acquisition_date) < 1095, '2-3 years'),
-                (func.extract('days', now - Asset.acquisition_date) < 1825, '3-5 years'),
-                else_='5+ years'
-            ).label('age_range'),
-            func.count(Asset.id).label('count')
-        ).where(Asset.status != 'retired').group_by('age_range')
+        query = (
+            select(
+                case(
+                    (
+                        func.extract("days", now - Asset.acquisition_date) < 365,
+                        "0-1 years",
+                    ),
+                    (
+                        func.extract("days", now - Asset.acquisition_date) < 730,
+                        "1-2 years",
+                    ),
+                    (
+                        func.extract("days", now - Asset.acquisition_date) < 1095,
+                        "2-3 years",
+                    ),
+                    (
+                        func.extract("days", now - Asset.acquisition_date) < 1825,
+                        "3-5 years",
+                    ),
+                    else_="5+ years",
+                ).label("age_range"),
+                func.count(Asset.id).label("count"),
+            )
+            .where(Asset.status != "retired")
+            .group_by("age_range")
+        )
 
         result = await db.execute(query)
         rows = result.all()
 
         distribution = {row.age_range: row.count for row in rows}
 
-        return {
-            'distribution': distribution,
-            'total': sum(distribution.values())
-        }
+        return {"distribution": distribution, "total": sum(distribution.values())}
 
     @staticmethod
     async def get_retirement_forecast(
-        db: AsyncSession,
-        months: int = 12
+        db: AsyncSession, months: int = 12
     ) -> Dict[str, Any]:
         """
         Forecast assets approaching retirement.
@@ -270,9 +262,9 @@ class AssetMetrics:
         # Assets older than 4 years (approaching 5-year retirement)
         approaching_retirement_query = select(func.count(Asset.id)).where(
             and_(
-                func.extract('days', now - Asset.acquisition_date) > 1460,  # 4 years
-                func.extract('days', now - Asset.acquisition_date) < 1825,  # 5 years
-                Asset.status != 'retired'
+                func.extract("days", now - Asset.acquisition_date) > 1460,  # 4 years
+                func.extract("days", now - Asset.acquisition_date) < 1825,  # 5 years
+                Asset.status != "retired",
             )
         )
 
@@ -280,7 +272,7 @@ class AssetMetrics:
         approaching_retirement = result.scalar() or 0
 
         return {
-            'approaching_retirement': approaching_retirement,
-            'forecast_months': months,
-            'forecast_date': forecast_date.isoformat()
+            "approaching_retirement": approaching_retirement,
+            "forecast_months": months,
+            "forecast_date": forecast_date.isoformat(),
         }

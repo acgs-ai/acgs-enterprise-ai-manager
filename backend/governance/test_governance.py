@@ -7,7 +7,7 @@ import sys
 import os
 
 # Add backend to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from backend.governance import ACGSIntegration, get_governance
 from datetime import datetime
@@ -28,7 +28,7 @@ def test_governance_initialization():
     print(f"  - Rules loaded: {status['rules_count']}")
     print(f"  - Constitution: {status['constitution_path']}")
 
-    assert status['rules_count'] > 0, "No rules loaded"
+    assert status["rules_count"] > 0, "No rules loaded"
     print("\n✅ PASSED: Governance initialization\n")
 
 
@@ -50,8 +50,8 @@ def test_safe_operation():
     print(f"Action: {result['action']}")
     print(f"Violations: {len(result['violations'])}")
 
-    assert result['valid'], "Safe operation should be valid"
-    assert result['action'] == 'ALLOW', "Safe operation should be allowed"
+    assert result["valid"], "Safe operation should be valid"
+    assert result["action"] == "ALLOW", "Safe operation should be allowed"
 
     print("\n✅ PASSED: Safe operation allowed\n")
 
@@ -74,11 +74,11 @@ def test_harmful_operation_blocked():
     print(f"Action: {result['action']}")
     print(f"Violations: {len(result['violations'])}")
 
-    if result['violations']:
+    if result["violations"]:
         print(f"Blocked by rule: {result['violations'][0]['rule_id']}")
 
-    assert not result['valid'], "Harmful operation should be invalid"
-    assert result['action'] == 'BLOCK', "Harmful operation should be blocked"
+    assert not result["valid"], "Harmful operation should be invalid"
+    assert result["action"] == "BLOCK", "Harmful operation should be blocked"
 
     # Test enforcement
     allowed = governance.enforce_decision(result, operation)
@@ -104,10 +104,10 @@ def test_pii_protection():
     print(f"Valid: {result['valid']}")
     print(f"Action: {result['action']}")
 
-    if result['violations']:
+    if result["violations"]:
         print(f"Blocked by rule: {result['violations'][0]['rule_id']}")
 
-    assert not result['valid'], "PII leakage should be blocked"
+    assert not result["valid"], "PII leakage should be blocked"
 
     print("\n✅ PASSED: PII protection working\n")
 
@@ -130,14 +130,15 @@ def test_approval_required():
     print(f"Requires approval: {result.get('requires_approval', False)}")
     print(f"Action: {result['action']}")
 
-    if result.get('requires_approval'):
+    if result.get("requires_approval"):
         approval_request = governance.request_approval(
             operation, context, agent_id="test_agent"
         )
         print(f"Approval request ID: {approval_request['request_id']}")
 
-    assert result.get('requires_approval') or result['action'] == 'REQUIRE_APPROVAL', \
-        "Data deletion should require approval"
+    assert (
+        result.get("requires_approval") or result["action"] == "REQUIRE_APPROVAL"
+    ), "Data deletion should require approval"
 
     print("\n✅ PASSED: Approval workflow triggered\n")
 
@@ -160,8 +161,9 @@ def test_ai_autonomous_operations():
     print(f"Action: {result['action']}")
     print(f"Requires approval: {result.get('requires_approval', False)}")
 
-    assert result.get('requires_approval') or result['action'] == 'REQUIRE_APPROVAL', \
-        "Autonomous operations should require approval"
+    assert (
+        result.get("requires_approval") or result["action"] == "REQUIRE_APPROVAL"
+    ), "Autonomous operations should require approval"
 
     print("\n✅ PASSED: AI autonomous operations gated\n")
 
@@ -185,7 +187,7 @@ def test_confidence_threshold():
     print(f"Valid: {result['valid']}")
 
     # High confidence - should pass
-    context['confidence'] = 0.85
+    context["confidence"] = 0.85
     result2 = governance.validate_operation(operation, context, agent_id="ai_agent")
 
     print(f"\nWith higher confidence: {context['confidence']}")
@@ -206,17 +208,14 @@ def test_audit_trail():
     operations = [
         "Read user profile",
         "Update task status",
-        "Generate AI recommendation"
+        "Generate AI recommendation",
     ]
 
     for op in operations:
         governance.validate_operation(op, {"test": True}, agent_id="audit_test")
 
     # Query audit trail
-    audit_entries = governance.inspect_audit_trail(
-        agent_id="audit_test",
-        limit=10
-    )
+    audit_entries = governance.inspect_audit_trail(agent_id="audit_test", limit=10)
 
     print(f"Audit entries found: {len(audit_entries)}")
 
@@ -234,7 +233,7 @@ def test_audit_trail():
         print(f"  - Total entries: {integrity['total_entries']}")
         print(f"  - Broken links: {len(integrity['broken_links'])}")
 
-        assert integrity['valid'], "Audit chain should be valid"
+        assert integrity["valid"], "Audit chain should be valid"
 
     print("\n✅ PASSED: Audit trail working\n")
 
@@ -279,7 +278,7 @@ def run_all_tests():
         test_ai_autonomous_operations,
         test_confidence_threshold,
         test_audit_trail,
-        test_fail_closed_enforcement
+        test_fail_closed_enforcement,
     ]
 
     passed = 0

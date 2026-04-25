@@ -13,40 +13,53 @@ from decimal import Decimal
 
 class FinancialRecordBase(BaseModel):
     """Base financial record schema with common fields."""
+
     type: str = Field(
         ...,
         pattern="^(expense|revenue|budget_allocation|invoice|payment)$",
-        description="Financial record type"
+        description="Financial record type",
     )
     amount: Decimal = Field(..., description="Transaction amount")
-    currency: str = Field(default='USD', min_length=3, max_length=3, description="Currency code")
+    currency: str = Field(
+        default="USD", min_length=3, max_length=3, description="Currency code"
+    )
     date: DateType = Field(..., description="Transaction date")
-    category: str = Field(..., min_length=1, max_length=100, description="Financial category")
+    category: str = Field(
+        ..., min_length=1, max_length=100, description="Financial category"
+    )
     project_id: Optional[UUID] = Field(None, description="Associated project ID")
     approval_status: str = Field(
-        default='pending',
+        default="pending",
         pattern="^(pending|approved|rejected)$",
-        description="Approval status"
+        description="Approval status",
     )
     approved_by: Optional[UUID] = Field(None, description="Approver user ID")
     description: Optional[str] = Field(None, description="Transaction description")
-    additional_data: Optional[Dict[str, Any]] = Field(None, description="Additional metadata")
+    additional_data: Optional[Dict[str, Any]] = Field(
+        None, description="Additional metadata"
+    )
 
 
 class FinancialRecordCreate(FinancialRecordBase):
     """Schema for creating a new financial record."""
+
     pass
 
 
 class FinancialRecordUpdate(BaseModel):
     """Schema for updating a financial record (all fields optional)."""
-    type: Optional[str] = Field(None, pattern="^(expense|revenue|budget_allocation|invoice|payment)$")
+
+    type: Optional[str] = Field(
+        None, pattern="^(expense|revenue|budget_allocation|invoice|payment)$"
+    )
     amount: Optional[Decimal] = None
     currency: Optional[str] = Field(None, min_length=3, max_length=3)
     date: Optional[DateType] = None
     category: Optional[str] = Field(None, min_length=1, max_length=100)
     project_id: Optional[UUID] = None
-    approval_status: Optional[str] = Field(None, pattern="^(pending|approved|rejected)$")
+    approval_status: Optional[str] = Field(
+        None, pattern="^(pending|approved|rejected)$"
+    )
     approved_by: Optional[UUID] = None
     description: Optional[str] = None
     additional_data: Optional[Dict[str, Any]] = None
@@ -54,6 +67,7 @@ class FinancialRecordUpdate(BaseModel):
 
 class FinancialRecordResponse(FinancialRecordBase):
     """Schema for financial record response."""
+
     id: UUID
     created_at: datetime
     updated_at: datetime
@@ -63,8 +77,13 @@ class FinancialRecordResponse(FinancialRecordBase):
 
 class FinancialRecordFilter(BaseModel):
     """Schema for financial record filtering parameters."""
-    type: Optional[str] = Field(None, pattern="^(expense|revenue|budget_allocation|invoice|payment)$")
-    approval_status: Optional[str] = Field(None, pattern="^(pending|approved|rejected)$")
+
+    type: Optional[str] = Field(
+        None, pattern="^(expense|revenue|budget_allocation|invoice|payment)$"
+    )
+    approval_status: Optional[str] = Field(
+        None, pattern="^(pending|approved|rejected)$"
+    )
     project_id: Optional[UUID] = None
     category: Optional[str] = None
     date_from: Optional[DateType] = Field(None, description="Date from")
@@ -75,6 +94,7 @@ class FinancialRecordFilter(BaseModel):
 
 class PaginatedFinancialRecordResponse(BaseModel):
     """Schema for paginated financial record list response."""
+
     items: List[FinancialRecordResponse]
     total: int
     page: int

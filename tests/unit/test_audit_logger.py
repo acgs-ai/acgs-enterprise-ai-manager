@@ -35,7 +35,7 @@ class TestAuditLogger:
             "valid": True,
             "action": "ALLOW",
             "violations": [],
-            "matched_rules": []
+            "matched_rules": [],
         }
 
         decision_id = logger.log_decision(
@@ -43,7 +43,7 @@ class TestAuditLogger:
             context=context,
             validation_result=validation_result,
             agent_id="test_agent",
-            duration_ms=10.5
+            duration_ms=10.5,
         )
 
         assert decision_id is not None
@@ -60,7 +60,7 @@ class TestAuditLogger:
             "operation": "Delete data",
             "context": {},
             "timeout_seconds": 3600,
-            "status": "PENDING"
+            "status": "PENDING",
         }
 
         entry_hash = logger.log_approval_request(approval_request)
@@ -77,7 +77,7 @@ class TestAuditLogger:
             request_id="req_123",
             approved=True,
             approver="admin_user",
-            reason="Authorized operation"
+            reason="Authorized operation",
         )
 
         assert entry_hash is not None
@@ -88,9 +88,7 @@ class TestAuditLogger:
         logger = AuditLogger(str(audit_dir))
 
         entry_hash = logger.log_enforcement(
-            operation="Dangerous operation",
-            action="BLOCKED",
-            reason="Rule violation"
+            operation="Dangerous operation", action="BLOCKED", reason="Rule violation"
         )
 
         assert entry_hash is not None
@@ -105,14 +103,14 @@ class TestAuditLogger:
             context={},
             validation_result={"valid": True, "action": "ALLOW"},
             agent_id="test",
-            duration_ms=1.0
+            duration_ms=1.0,
         )
 
         integrity = logger.verify_chain_integrity()
 
-        assert integrity['valid'] is True
-        assert integrity['total_entries'] == 1
-        assert len(integrity['broken_links']) == 0
+        assert integrity["valid"] is True
+        assert integrity["total_entries"] == 1
+        assert len(integrity["broken_links"]) == 0
 
     def test_chain_integrity_multiple_entries(self, temp_dir):
         """Test chain integrity with multiple entries."""
@@ -126,14 +124,14 @@ class TestAuditLogger:
                 context={},
                 validation_result={"valid": True, "action": "ALLOW"},
                 agent_id="test",
-                duration_ms=1.0
+                duration_ms=1.0,
             )
 
         integrity = logger.verify_chain_integrity()
 
-        assert integrity['valid'] is True
-        assert integrity['total_entries'] == 5
-        assert len(integrity['broken_links']) == 0
+        assert integrity["valid"] is True
+        assert integrity["total_entries"] == 5
+        assert len(integrity["broken_links"]) == 0
 
     def test_query_audit_trail(self, temp_dir):
         """Test querying audit trail with filters."""
@@ -146,14 +144,14 @@ class TestAuditLogger:
             context={},
             validation_result={"valid": True, "action": "ALLOW"},
             agent_id="agent_1",
-            duration_ms=1.0
+            duration_ms=1.0,
         )
         logger.log_decision(
             operation="Op 2",
             context={},
             validation_result={"valid": False, "action": "BLOCK"},
             agent_id="agent_2",
-            duration_ms=2.0
+            duration_ms=2.0,
         )
 
         # Query all entries
@@ -163,7 +161,7 @@ class TestAuditLogger:
         # Query by agent_id
         agent1_entries = logger.query_audit_trail(agent_id="agent_1")
         assert len(agent1_entries) == 1
-        assert agent1_entries[0]['agent_id'] == "agent_1"
+        assert agent1_entries[0]["agent_id"] == "agent_1"
 
     def test_query_audit_trail_by_type(self, temp_dir):
         """Test querying audit trail by entry type."""
@@ -175,13 +173,9 @@ class TestAuditLogger:
             context={},
             validation_result={"valid": True, "action": "ALLOW"},
             agent_id="test",
-            duration_ms=1.0
+            duration_ms=1.0,
         )
-        logger.log_enforcement(
-            operation="Test",
-            action="BLOCKED",
-            reason="Test"
-        )
+        logger.log_enforcement(operation="Test", action="BLOCKED", reason="Test")
 
         decision_entries = logger.query_audit_trail(entry_type="DECISION")
         enforcement_entries = logger.query_audit_trail(entry_type="ENFORCEMENT")
@@ -198,15 +192,15 @@ class TestAuditLogger:
             "user_id": "123",
             "password": "secret123",
             "api_key": "key_abc",
-            "token": "token_xyz"
+            "token": "token_xyz",
         }
 
         sanitized = logger._sanitize_context(sensitive_context)
 
-        assert sanitized['user_id'] == "123"
-        assert sanitized['password'] == "***REDACTED***"
-        assert sanitized['api_key'] == "***REDACTED***"
-        assert sanitized['token'] == "***REDACTED***"
+        assert sanitized["user_id"] == "123"
+        assert sanitized["password"] == "***REDACTED***"
+        assert sanitized["api_key"] == "***REDACTED***"
+        assert sanitized["token"] == "***REDACTED***"
 
     def test_audit_log_file_format(self, temp_dir):
         """Test audit log file is valid JSONL format."""
@@ -218,17 +212,17 @@ class TestAuditLogger:
             context={},
             validation_result={"valid": True, "action": "ALLOW"},
             agent_id="test",
-            duration_ms=1.0
+            duration_ms=1.0,
         )
 
         # Read log file directly
         log_file = logger.current_log_file
-        with open(log_file, 'r') as f:
+        with open(log_file, "r") as f:
             line = f.readline()
             entry = json.loads(line)
 
-        assert 'type' in entry
-        assert 'timestamp' in entry
-        assert 'previous_hash' in entry
-        assert 'entry_hash' in entry
-        assert entry['previous_hash'] == "GENESIS"
+        assert "type" in entry
+        assert "timestamp" in entry
+        assert "previous_hash" in entry
+        assert "entry_hash" in entry
+        assert entry["previous_hash"] == "GENESIS"

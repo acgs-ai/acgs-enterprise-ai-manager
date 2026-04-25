@@ -10,7 +10,13 @@ import logging
 import hashlib
 import json
 
-from backend.cache.redis_client import cache_get, cache_set, SHORT_TTL, DEFAULT_TTL, LONG_TTL
+from backend.cache.redis_client import (
+    cache_get,
+    cache_set,
+    SHORT_TTL,
+    DEFAULT_TTL,
+    LONG_TTL,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +71,7 @@ class CachingMiddleware(BaseHTTPMiddleware):
             return JSONResponse(
                 content=cached_response["content"],
                 status_code=cached_response["status_code"],
-                headers={"X-Cache": "HIT"}
+                headers={"X-Cache": "HIT"},
             )
 
         # Execute request
@@ -87,19 +93,18 @@ class CachingMiddleware(BaseHTTPMiddleware):
                     # Cache the response
                     await cache_set(
                         cache_key,
-                        {
-                            "content": content,
-                            "status_code": response.status_code
-                        },
-                        ttl
+                        {"content": content, "status_code": response.status_code},
+                        ttl,
                     )
-                    logger.debug(f"Cached response for {request.url.path} (TTL: {ttl}s)")
+                    logger.debug(
+                        f"Cached response for {request.url.path} (TTL: {ttl}s)"
+                    )
 
                     # Return new response with cached content
                     return JSONResponse(
                         content=content,
                         status_code=response.status_code,
-                        headers={"X-Cache": "MISS"}
+                        headers={"X-Cache": "MISS"},
                     )
                 except Exception as e:
                     logger.error(f"Failed to cache response: {e}")

@@ -19,8 +19,8 @@ REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", None)
 
 # Cache TTL settings (in seconds)
 DEFAULT_TTL = 300  # 5 minutes
-SHORT_TTL = 60     # 1 minute
-LONG_TTL = 3600    # 1 hour
+SHORT_TTL = 60  # 1 minute
+LONG_TTL = 3600  # 1 hour
 
 # Redis client instance
 _redis_client: Optional[redis.Redis] = None
@@ -249,6 +249,7 @@ def cached(ttl: int = DEFAULT_TTL, key_prefix: str = ""):
         async def get_tasks():
             ...
     """
+
     def decorator(func):
         async def wrapper(*args, **kwargs):
             # Build cache key from function name and arguments
@@ -268,4 +269,5 @@ def cached(ttl: int = DEFAULT_TTL, key_prefix: str = ""):
             return result
 
         return wrapper
+
     return decorator

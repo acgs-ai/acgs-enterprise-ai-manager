@@ -17,7 +17,7 @@ from backend.schemas.infrastructure import (
     InfrastructureUpdate,
     InfrastructureResponse,
     InfrastructureFilter,
-    PaginatedInfrastructureResponse
+    PaginatedInfrastructureResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -25,10 +25,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.post("/", response_model=InfrastructureResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/", response_model=InfrastructureResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_infrastructure(
-    infra_data: InfrastructureCreate,
-    db: AsyncSession = Depends(get_db)
+    infra_data: InfrastructureCreate, db: AsyncSession = Depends(get_db)
 ):
     """Create a new infrastructure."""
     try:
@@ -39,21 +40,18 @@ async def create_infrastructure(
         logger.error(f"Failed to create infrastructure: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create infrastructure"
+            detail="Failed to create infrastructure",
         )
 
 
 @router.get("/{infra_id}", response_model=InfrastructureResponse)
-async def get_infrastructure(
-    infra_id: UUID,
-    db: AsyncSession = Depends(get_db)
-):
+async def get_infrastructure(infra_id: UUID, db: AsyncSession = Depends(get_db)):
     """Get infrastructure by ID."""
     infra = await InfrastructureService.get_infrastructure(db, infra_id)
     if not infra:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Infrastructure {infra_id} not found"
+            detail=f"Infrastructure {infra_id} not found",
         )
     return infra
 
@@ -66,22 +64,16 @@ async def list_infrastructure(
     status_filter: Optional[str] = Query(None, alias="status"),
     location: Optional[str] = Query(None),
     search: Optional[str] = Query(None, max_length=255),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """List infrastructure with filtering and pagination."""
     try:
         filters = InfrastructureFilter(
-            type=type_filter,
-            status=status_filter,
-            location=location,
-            search=search
+            type=type_filter, status=status_filter, location=location, search=search
         )
 
         items, total = await InfrastructureService.list_infrastructure(
-            db,
-            filters=filters,
-            page=page,
-            page_size=page_size
+            db, filters=filters, page=page, page_size=page_size
         )
 
         total_pages = math.ceil(total / page_size) if total > 0 else 0
@@ -91,43 +83,38 @@ async def list_infrastructure(
             total=total,
             page=page,
             page_size=page_size,
-            total_pages=total_pages
+            total_pages=total_pages,
         )
     except Exception as e:
         logger.error(f"Failed to list infrastructure: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to list infrastructure"
+            detail="Failed to list infrastructure",
         )
 
 
 @router.put("/{infra_id}", response_model=InfrastructureResponse)
 async def update_infrastructure(
-    infra_id: UUID,
-    infra_data: InfrastructureUpdate,
-    db: AsyncSession = Depends(get_db)
+    infra_id: UUID, infra_data: InfrastructureUpdate, db: AsyncSession = Depends(get_db)
 ):
     """Update infrastructure."""
     infra = await InfrastructureService.update_infrastructure(db, infra_id, infra_data)
     if not infra:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Infrastructure {infra_id} not found"
+            detail=f"Infrastructure {infra_id} not found",
         )
     logger.info(f"Updated infrastructure: {infra_id}")
     return infra
 
 
 @router.delete("/{infra_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_infrastructure(
-    infra_id: UUID,
-    db: AsyncSession = Depends(get_db)
-):
+async def delete_infrastructure(infra_id: UUID, db: AsyncSession = Depends(get_db)):
     """Delete infrastructure."""
     deleted = await InfrastructureService.delete_infrastructure(db, infra_id)
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Infrastructure {infra_id} not found"
+            detail=f"Infrastructure {infra_id} not found",
         )
     logger.info(f"Deleted infrastructure: {infra_id}")

@@ -14,20 +14,23 @@ from backend.database import Base
 
 class Project(Base):
     """Project model."""
+
     __tablename__ = "projects"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String(255), nullable=False)
     description = Column(Text)
-    status = Column(String(50), nullable=False, default='planning')
+    status = Column(String(50), nullable=False, default="planning")
     start_date = Column(Date)
     end_date = Column(Date)
     budget = Column(Numeric(15, 2))
     actual_cost = Column(Numeric(15, 2), default=0)
     team = Column(JSONB, default=[])
-    owner_id = Column(UUID(as_uuid=True), ForeignKey('users.id'))
+    owner_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
-    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(
+        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
     # Relationships
     owner = relationship("User", back_populates="projects")

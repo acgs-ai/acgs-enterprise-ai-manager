@@ -37,9 +37,7 @@ class TaskService:
 
     @staticmethod
     async def get_task(
-        db: AsyncSession,
-        task_id: UUID,
-        include_relations: bool = False
+        db: AsyncSession, task_id: UUID, include_relations: bool = False
     ) -> Optional[Task]:
         """
         Get a task by ID.
@@ -59,7 +57,7 @@ class TaskService:
                 selectinload(Task.assignee),
                 selectinload(Task.project),
                 selectinload(Task.assets),
-                selectinload(Task.infrastructure)
+                selectinload(Task.infrastructure),
             )
 
         result = await db.execute(query)
@@ -71,7 +69,7 @@ class TaskService:
         filters: Optional[TaskFilter] = None,
         page: int = 1,
         page_size: int = 50,
-        include_relations: bool = False
+        include_relations: bool = False,
     ) -> tuple[List[Task], int]:
         """
         List tasks with filtering and pagination.
@@ -110,7 +108,7 @@ class TaskService:
                 conditions.append(
                     or_(
                         Task.title.ilike(search_term),
-                        Task.description.ilike(search_term)
+                        Task.description.ilike(search_term),
                     )
                 )
 
@@ -145,7 +143,7 @@ class TaskService:
                 selectinload(Task.assignee),
                 selectinload(Task.project),
                 selectinload(Task.assets),
-                selectinload(Task.infrastructure)
+                selectinload(Task.infrastructure),
             )
 
         # Execute query
@@ -156,9 +154,7 @@ class TaskService:
 
     @staticmethod
     async def update_task(
-        db: AsyncSession,
-        task_id: UUID,
-        task_data: TaskUpdate
+        db: AsyncSession, task_id: UUID, task_data: TaskUpdate
     ) -> Optional[Task]:
         """
         Update a task.
@@ -181,7 +177,7 @@ class TaskService:
             setattr(task, field, value)
 
         # Auto-set completed_at when status changes to 'done'
-        if task_data.status == 'done' and task.completed_at is None:
+        if task_data.status == "done" and task.completed_at is None:
             task.completed_at = datetime.utcnow()
 
         task.updated_at = datetime.utcnow()
@@ -212,9 +208,7 @@ class TaskService:
 
     @staticmethod
     async def link_asset(
-        db: AsyncSession,
-        task_id: UUID,
-        asset_id: UUID
+        db: AsyncSession, task_id: UUID, asset_id: UUID
     ) -> Optional[Task]:
         """
         Link an asset to a task.
@@ -233,6 +227,7 @@ class TaskService:
 
         # Import here to avoid circular dependency
         from backend.models.asset import ITAsset
+
         asset = await db.get(ITAsset, asset_id)
         if asset and asset not in task.assets:
             task.assets.append(asset)
@@ -243,9 +238,7 @@ class TaskService:
 
     @staticmethod
     async def link_infrastructure(
-        db: AsyncSession,
-        task_id: UUID,
-        infrastructure_id: UUID
+        db: AsyncSession, task_id: UUID, infrastructure_id: UUID
     ) -> Optional[Task]:
         """
         Link infrastructure to a task.
@@ -264,6 +257,7 @@ class TaskService:
 
         # Import here to avoid circular dependency
         from backend.models.infrastructure import Infrastructure
+
         infra = await db.get(Infrastructure, infrastructure_id)
         if infra and infra not in task.infrastructure:
             task.infrastructure.append(infra)

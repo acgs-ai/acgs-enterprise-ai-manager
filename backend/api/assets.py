@@ -18,7 +18,7 @@ from backend.schemas.asset import (
     ITAssetResponse,
     ITAssetDetailResponse,
     ITAssetFilter,
-    PaginatedITAssetResponse
+    PaginatedITAssetResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -26,11 +26,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.post("/", response_model=ITAssetDetailResponse, status_code=status.HTTP_201_CREATED)
-async def create_asset(
-    asset_data: ITAssetCreate,
-    db: AsyncSession = Depends(get_db)
-):
+@router.post(
+    "/", response_model=ITAssetDetailResponse, status_code=status.HTTP_201_CREATED
+)
+async def create_asset(asset_data: ITAssetCreate, db: AsyncSession = Depends(get_db)):
     """
     Create a new IT asset.
 
@@ -49,15 +48,12 @@ async def create_asset(
         logger.error(f"Failed to create IT asset: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create IT asset"
+            detail="Failed to create IT asset",
         )
 
 
 @router.get("/{asset_id}", response_model=ITAssetDetailResponse)
-async def get_asset(
-    asset_id: UUID,
-    db: AsyncSession = Depends(get_db)
-):
+async def get_asset(asset_id: UUID, db: AsyncSession = Depends(get_db)):
     """
     Get an IT asset by ID with all related entities.
 
@@ -72,7 +68,7 @@ async def get_asset(
     if not asset:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"IT asset {asset_id} not found"
+            detail=f"IT asset {asset_id} not found",
         )
     return asset
 
@@ -89,7 +85,7 @@ async def list_assets(
     location: Optional[str] = Query(None, max_length=255),
     search: Optional[str] = Query(None, max_length=255),
     include_relations: bool = Query(False, description="Include related entities"),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """
     List IT assets with filtering and pagination.
@@ -119,7 +115,7 @@ async def list_assets(
             owner_id=owner_id,
             project_id=project_id,
             location=location,
-            search=search
+            search=search,
         )
 
         # Get assets
@@ -128,7 +124,7 @@ async def list_assets(
             filters=filters,
             page=page,
             page_size=page_size,
-            include_relations=include_relations
+            include_relations=include_relations,
         )
 
         # Calculate total pages
@@ -139,21 +135,19 @@ async def list_assets(
             total=total,
             page=page,
             page_size=page_size,
-            total_pages=total_pages
+            total_pages=total_pages,
         )
     except Exception as e:
         logger.error(f"Failed to list IT assets: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to list IT assets"
+            detail="Failed to list IT assets",
         )
 
 
 @router.put("/{asset_id}", response_model=ITAssetDetailResponse)
 async def update_asset(
-    asset_id: UUID,
-    asset_data: ITAssetUpdate,
-    db: AsyncSession = Depends(get_db)
+    asset_id: UUID, asset_data: ITAssetUpdate, db: AsyncSession = Depends(get_db)
 ):
     """
     Update an IT asset.
@@ -170,17 +164,14 @@ async def update_asset(
     if not asset:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"IT asset {asset_id} not found"
+            detail=f"IT asset {asset_id} not found",
         )
     logger.info(f"Updated IT asset: {asset_id}")
     return asset
 
 
 @router.delete("/{asset_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_asset(
-    asset_id: UUID,
-    db: AsyncSession = Depends(get_db)
-):
+async def delete_asset(asset_id: UUID, db: AsyncSession = Depends(get_db)):
     """
     Delete an IT asset.
 
@@ -195,7 +186,7 @@ async def delete_asset(
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"IT asset {asset_id} not found"
+            detail=f"IT asset {asset_id} not found",
         )
     logger.info(f"Deleted IT asset: {asset_id}")
 
@@ -205,7 +196,7 @@ async def get_project_assets(
     project_id: UUID,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Get all IT assets for a specific project.
@@ -221,11 +212,7 @@ async def get_project_assets(
     """
     filters = ITAssetFilter(project_id=project_id)
     assets, total = await ITAssetService.list_assets(
-        db,
-        filters=filters,
-        page=page,
-        page_size=page_size,
-        include_relations=True
+        db, filters=filters, page=page, page_size=page_size, include_relations=True
     )
 
     total_pages = math.ceil(total / page_size) if total > 0 else 0
@@ -235,7 +222,7 @@ async def get_project_assets(
         total=total,
         page=page,
         page_size=page_size,
-        total_pages=total_pages
+        total_pages=total_pages,
     )
 
 
@@ -244,7 +231,7 @@ async def get_owner_assets(
     owner_id: UUID,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Get all IT assets owned by a specific user.
@@ -260,11 +247,7 @@ async def get_owner_assets(
     """
     filters = ITAssetFilter(owner_id=owner_id)
     assets, total = await ITAssetService.list_assets(
-        db,
-        filters=filters,
-        page=page,
-        page_size=page_size,
-        include_relations=True
+        db, filters=filters, page=page, page_size=page_size, include_relations=True
     )
 
     total_pages = math.ceil(total / page_size) if total > 0 else 0
@@ -274,7 +257,7 @@ async def get_owner_assets(
         total=total,
         page=page,
         page_size=page_size,
-        total_pages=total_pages
+        total_pages=total_pages,
     )
 
 
@@ -283,7 +266,7 @@ async def get_assets_by_lifecycle(
     stage: str,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Get all IT assets in a specific lifecycle stage.
@@ -299,11 +282,7 @@ async def get_assets_by_lifecycle(
     """
     filters = ITAssetFilter(lifecycle_stage=stage)
     assets, total = await ITAssetService.list_assets(
-        db,
-        filters=filters,
-        page=page,
-        page_size=page_size,
-        include_relations=True
+        db, filters=filters, page=page, page_size=page_size, include_relations=True
     )
 
     total_pages = math.ceil(total / page_size) if total > 0 else 0
@@ -313,5 +292,5 @@ async def get_assets_by_lifecycle(
         total=total,
         page=page,
         page_size=page_size,
-        total_pages=total_pages
+        total_pages=total_pages,
     )

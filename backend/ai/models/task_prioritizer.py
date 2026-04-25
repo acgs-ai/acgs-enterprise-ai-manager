@@ -35,7 +35,7 @@ class TaskPrioritizer:
             Recommendation with confidence, rationale, and suggested priority
         """
         # Stub implementation - will integrate with actual task data once CRUD APIs are ready
-        task_data = context.get('task_data', {})
+        task_data = context.get("task_data", {})
 
         # Calculate priority score based on multiple factors
         priority_score = self._calculate_priority_score(task_data)
@@ -55,14 +55,14 @@ class TaskPrioritizer:
         rationale = self._generate_rationale(task_data, priority_score)
 
         return {
-            'suggestion': f"Set priority to '{recommended_priority}'",
-            'confidence': confidence,
-            'rationale': rationale,
-            'metadata': {
-                'priority_score': priority_score,
-                'recommended_priority': recommended_priority,
-                'factors': self._get_priority_factors(task_data)
-            }
+            "suggestion": f"Set priority to '{recommended_priority}'",
+            "confidence": confidence,
+            "rationale": rationale,
+            "metadata": {
+                "priority_score": priority_score,
+                "recommended_priority": recommended_priority,
+                "factors": self._get_priority_factors(task_data),
+            },
         }
 
     def _calculate_priority_score(self, task_data: Dict[str, Any]) -> float:
@@ -70,7 +70,7 @@ class TaskPrioritizer:
         score = 0.5  # Base score
 
         # Factor 1: Deadline urgency
-        due_date = task_data.get('due_date')
+        due_date = task_data.get("due_date")
         if due_date:
             days_until_due = self._days_until(due_date)
             if days_until_due <= 1:
@@ -81,15 +81,15 @@ class TaskPrioritizer:
                 score += 0.1
 
         # Factor 2: Blocking other tasks
-        blocks_count = len(task_data.get('blocks', []))
+        blocks_count = len(task_data.get("blocks", []))
         if blocks_count > 0:
             score += min(0.2, blocks_count * 0.05)
 
         # Factor 3: Project importance
-        project_priority = task_data.get('project_priority', 'medium')
-        if project_priority == 'high':
+        project_priority = task_data.get("project_priority", "medium")
+        if project_priority == "high":
             score += 0.1
-        elif project_priority == 'urgent':
+        elif project_priority == "urgent":
             score += 0.15
 
         return min(1.0, max(0.0, score))
@@ -99,35 +99,39 @@ class TaskPrioritizer:
         confidence = 0.7  # Base confidence
 
         # Higher confidence if we have more data
-        if task_data.get('due_date'):
+        if task_data.get("due_date"):
             confidence += 0.1
-        if task_data.get('estimated_hours'):
+        if task_data.get("estimated_hours"):
             confidence += 0.05
-        if task_data.get('assignee_id'):
+        if task_data.get("assignee_id"):
             confidence += 0.05
-        if task_data.get('project_id'):
+        if task_data.get("project_id"):
             confidence += 0.1
 
         return min(1.0, confidence)
 
-    def _generate_rationale(self, task_data: Dict[str, Any], priority_score: float) -> str:
+    def _generate_rationale(
+        self, task_data: Dict[str, Any], priority_score: float
+    ) -> str:
         """Generate human-readable rationale for the recommendation"""
         reasons = []
 
-        due_date = task_data.get('due_date')
+        due_date = task_data.get("due_date")
         if due_date:
             days_until_due = self._days_until(due_date)
             if days_until_due <= 1:
-                reasons.append(f"Due in {days_until_due} day(s) - immediate attention required")
+                reasons.append(
+                    f"Due in {days_until_due} day(s) - immediate attention required"
+                )
             elif days_until_due <= 7:
                 reasons.append(f"Due in {days_until_due} days - approaching deadline")
 
-        blocks_count = len(task_data.get('blocks', []))
+        blocks_count = len(task_data.get("blocks", []))
         if blocks_count > 0:
             reasons.append(f"Blocks {blocks_count} other task(s)")
 
-        project_priority = task_data.get('project_priority')
-        if project_priority in ['high', 'urgent']:
+        project_priority = task_data.get("project_priority")
+        if project_priority in ["high", "urgent"]:
             reasons.append(f"Part of {project_priority}-priority project")
 
         if not reasons:
@@ -138,17 +142,17 @@ class TaskPrioritizer:
     def _get_priority_factors(self, task_data: Dict[str, Any]) -> Dict[str, Any]:
         """Extract priority factors for transparency"""
         return {
-            'has_deadline': task_data.get('due_date') is not None,
-            'blocks_count': len(task_data.get('blocks', [])),
-            'project_priority': task_data.get('project_priority', 'unknown'),
-            'has_assignee': task_data.get('assignee_id') is not None
+            "has_deadline": task_data.get("due_date") is not None,
+            "blocks_count": len(task_data.get("blocks", [])),
+            "project_priority": task_data.get("project_priority", "unknown"),
+            "has_assignee": task_data.get("assignee_id") is not None,
         }
 
     def _days_until(self, date_str: str) -> int:
         """Calculate days until a date"""
         try:
             if isinstance(date_str, str):
-                target_date = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                target_date = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
             else:
                 target_date = date_str
             delta = target_date - datetime.utcnow()
@@ -157,9 +161,7 @@ class TaskPrioritizer:
             return 999  # Unknown date
 
     async def get_top_recommendations(
-        self,
-        limit: int = 10,
-        min_confidence: float = 0.5
+        self, limit: int = 10, min_confidence: float = 0.5
     ) -> List[Dict[str, Any]]:
         """
         Get top task priority recommendations.
@@ -167,5 +169,7 @@ class TaskPrioritizer:
         Stub implementation - will query actual tasks once CRUD APIs are ready.
         """
         # Placeholder: return empty list until task CRUD is available
-        logger.info(f"Top recommendations requested (limit={limit}, min_confidence={min_confidence})")
+        logger.info(
+            f"Top recommendations requested (limit={limit}, min_confidence={min_confidence})"
+        )
         return []

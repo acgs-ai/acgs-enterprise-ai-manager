@@ -22,6 +22,7 @@ router = APIRouter()
 # Request/Response schemas
 class SearchRequest(BaseModel):
     """Search request schema."""
+
     query: str = Field(..., min_length=1, max_length=500)
     domains: Optional[List[str]] = Field(None, description="Filter by domains")
     tags: Optional[List[str]] = Field(None, description="Filter by tags")
@@ -32,6 +33,7 @@ class SearchRequest(BaseModel):
 
 class SearchResponse(BaseModel):
     """Search response schema."""
+
     results: List[SearchResult]
     total: int
     page: int
@@ -42,12 +44,14 @@ class SearchResponse(BaseModel):
 
 class IndexStatsResponse(BaseModel):
     """Index statistics response."""
+
     total_indexed: int
     by_domain: dict
 
 
 class ReindexResponse(BaseModel):
     """Reindex response."""
+
     success: bool
     indexed_counts: dict
     message: str
@@ -56,12 +60,16 @@ class ReindexResponse(BaseModel):
 @router.get("/", response_model=SearchResponse)
 async def search(
     q: str = Query(..., min_length=1, max_length=500, description="Search query"),
-    domains: Optional[str] = Query(None, description="Comma-separated domains to search"),
+    domains: Optional[str] = Query(
+        None, description="Comma-separated domains to search"
+    ),
     tags: Optional[str] = Query(None, description="Comma-separated tags to filter"),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(50, ge=1, le=100, description="Results per page"),
-    min_relevance: float = Query(0.0, ge=0.0, le=1.0, description="Minimum relevance score"),
-    db: AsyncSession = Depends(get_db)
+    min_relevance: float = Query(
+        0.0, ge=0.0, le=1.0, description="Minimum relevance score"
+    ),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Search across all domains with full-text search and relevance ranking.
@@ -80,8 +88,8 @@ async def search(
     """
     try:
         # Parse domains and tags
-        domain_list = [d.strip() for d in domains.split(',')] if domains else None
-        tag_list = [t.strip() for t in tags.split(',')] if tags else None
+        domain_list = [d.strip() for d in domains.split(",")] if domains else None
+        tag_list = [t.strip() for t in tags.split(",")] if tags else None
 
         # Calculate offset
         offset = (page - 1) * page_size
@@ -94,7 +102,7 @@ async def search(
             tags=tag_list,
             limit=page_size,
             offset=offset,
-            min_relevance=min_relevance
+            min_relevance=min_relevance,
         )
 
         # Calculate total pages
@@ -106,14 +114,13 @@ async def search(
             page=page,
             page_size=page_size,
             total_pages=total_pages,
-            query=q
+            query=q,
         )
 
     except Exception as e:
         logger.error(f"Search failed: {e}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Search failed"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Search failed"
         )
 
 
@@ -123,7 +130,7 @@ async def search_by_domain(
     q: str = Query(..., min_length=1, max_length=500),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Search within a specific domain.
@@ -141,17 +148,13 @@ async def search_by_domain(
     if domain not in SearchEngine.SUPPORTED_DOMAINS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid domain. Supported: {', '.join(SearchEngine.SUPPORTED_DOMAINS)}"
+            detail=f"Invalid domain. Supported: {', '.join(SearchEngine.SUPPORTED_DOMAINS)}",
         )
 
     offset = (page - 1) * page_size
 
     results, total = await SearchEngine.search_by_domain(
-        db,
-        domain=domain,
-        query=q,
-        limit=page_size,
-        offset=offset
+        db, domain=domain, query=q, limit=page_size, offset=offset
     )
 
     total_pages = math.ceil(total / page_size) if total > 0 else 0
@@ -162,7 +165,7 @@ async def search_by_domain(
         page=page,
         page_size=page_size,
         total_pages=total_pages,
-        query=q
+        query=q,
     )
 
 
@@ -172,7 +175,7 @@ async def search_by_tags(
     q: Optional[str] = Query(None, min_length=1, max_length=500),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Search by tags with optional text query.
@@ -187,15 +190,11 @@ async def search_by_tags(
     Returns:
         Search results matching tags
     """
-    tag_list = [t.strip() for t in tags.split(',')]
+    tag_list = [t.strip() for t in tags.split(",")]
     offset = (page - 1) * page_size
 
     results, total = await SearchEngine.search_by_tags(
-        db,
-        tags=tag_list,
-        query=q,
-        limit=page_size,
-        offset=offset
+        db, tags=tag_list, query=q, limit=page_size, offset=offset
     )
 
     total_pages = math.ceil(total / page_size) if total > 0 else 0
@@ -206,7 +205,7 @@ async def search_by_tags(
         page=page,
         page_size=page_size,
         total_pages=total_pages,
-        query=q or f"tags:{tags}"
+        query=q or f"tags:{tags}",
     )
 
 
@@ -214,7 +213,7 @@ async def search_by_tags(
 async def search_suggestions(
     q: str = Query(..., min_length=2, max_length=100),
     limit: int = Query(10, ge=1, le=50),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Get search suggestions based on partial query.
@@ -235,7 +234,7 @@ async def search_suggestions(
 async def get_popular_tags(
     domain: Optional[str] = Query(None, description="Filter by domain"),
     limit: int = Query(20, ge=1, le=100),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Get most popular tags across domains.
@@ -251,13 +250,11 @@ async def get_popular_tags(
     if domain and domain not in SearchEngine.SUPPORTED_DOMAINS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid domain. Supported: {', '.join(SearchEngine.SUPPORTED_DOMAINS)}"
+            detail=f"Invalid domain. Supported: {', '.join(SearchEngine.SUPPORTED_DOMAINS)}",
         )
 
     tags = await SearchEngine.get_popular_tags(db, domain=domain, limit=limit)
-    return {
-        "tags": [{"tag": tag, "count": count} for tag, count in tags]
-    }
+    return {"tags": [{"tag": tag, "count": count} for tag, count in tags]}
 
 
 @router.get("/stats", response_model=IndexStatsResponse)
@@ -290,19 +287,19 @@ async def reindex_all(db: AsyncSession = Depends(get_db)):
     try:
         counts = await SearchIndexer.reindex_all(db)
         total = sum(counts.values())
-        
+
         logger.info(f"Reindexed {total} entities across {len(counts)} domains")
-        
+
         return ReindexResponse(
             success=True,
             indexed_counts=counts,
-            message=f"Successfully reindexed {total} entities"
+            message=f"Successfully reindexed {total} entities",
         )
     except Exception as e:
         logger.error(f"Reindex failed: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Reindex operation failed"
+            detail="Reindex operation failed",
         )
 
 
@@ -316,5 +313,5 @@ async def get_supported_domains():
     """
     return {
         "domains": SearchEngine.SUPPORTED_DOMAINS,
-        "count": len(SearchEngine.SUPPORTED_DOMAINS)
+        "count": len(SearchEngine.SUPPORTED_DOMAINS),
     }

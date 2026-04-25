@@ -14,6 +14,7 @@ from backend.database import Base
 
 class Document(Base):
     """Document model with tagging and cross-domain linking."""
+
     __tablename__ = "documents"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -26,8 +27,10 @@ class Document(Base):
     )
     tags = Column(JSONB, default=list)
     created_date = Column(DateTime(timezone=True), default=datetime.utcnow)
-    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
-    owner_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=True)
+    updated_at = Column(
+        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+    owner_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     version = Column(Integer, default=1)
     file_path = Column(String(500), nullable=True)
     file_size = Column(Integer, nullable=True)

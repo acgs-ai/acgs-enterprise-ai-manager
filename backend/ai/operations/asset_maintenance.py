@@ -23,9 +23,7 @@ class AssetMaintenanceHandler:
         logger.info(f"{self.name} initialized")
 
     async def execute(
-        self,
-        details: Dict[str, Any],
-        context: Dict[str, Any]
+        self, details: Dict[str, Any], context: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
         Execute autonomous asset maintenance scheduling.
@@ -37,8 +35,8 @@ class AssetMaintenanceHandler:
         Returns:
             Dict containing maintenance scheduling result
         """
-        asset_id = details.get('asset_id')
-        maintenance_type = details.get('maintenance_type', 'preventive')
+        asset_id = details.get("asset_id")
+        maintenance_type = details.get("maintenance_type", "preventive")
 
         if not asset_id:
             raise ValueError("asset_id is required")
@@ -53,41 +51,31 @@ class AssetMaintenanceHandler:
 
         # Calculate optimal maintenance window
         maintenance_window = self._calculate_maintenance_window(
-            asset_id,
-            urgency,
-            context
+            asset_id, urgency, context
         )
 
         # Estimate maintenance duration and cost
         estimates = self._estimate_maintenance(
-            asset_id,
-            maintenance_type,
-            asset_condition,
-            context
+            asset_id, maintenance_type, asset_condition, context
         )
 
         # Prepare maintenance schedule result
         result = {
-            'asset_id': asset_id,
-            'maintenance_type': maintenance_type,
-            'urgency': urgency,
-            'scheduled_start': maintenance_window['start'],
-            'scheduled_end': maintenance_window['end'],
-            'estimated_duration_hours': estimates['duration_hours'],
-            'estimated_cost': estimates['cost'],
-            'asset_condition': asset_condition,
-            'reasoning': self._generate_reasoning(
-                asset_id,
-                maintenance_type,
-                urgency,
-                asset_condition,
-                estimates
+            "asset_id": asset_id,
+            "maintenance_type": maintenance_type,
+            "urgency": urgency,
+            "scheduled_start": maintenance_window["start"],
+            "scheduled_end": maintenance_window["end"],
+            "estimated_duration_hours": estimates["duration_hours"],
+            "estimated_cost": estimates["cost"],
+            "asset_condition": asset_condition,
+            "reasoning": self._generate_reasoning(
+                asset_id, maintenance_type, urgency, asset_condition, estimates
             ),
-            'maintenance_tasks': self._generate_maintenance_tasks(
-                maintenance_type,
-                asset_condition
+            "maintenance_tasks": self._generate_maintenance_tasks(
+                maintenance_type, asset_condition
             ),
-            'scheduled_at': datetime.utcnow().isoformat()
+            "scheduled_at": datetime.utcnow().isoformat(),
         }
 
         logger.info(
@@ -99,9 +87,7 @@ class AssetMaintenanceHandler:
         return result
 
     def _analyze_asset_condition(
-        self,
-        asset_id: str,
-        context: Dict[str, Any]
+        self, asset_id: str, context: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
         Analyze current condition of the asset.
@@ -113,29 +99,30 @@ class AssetMaintenanceHandler:
         Returns:
             Dict containing condition analysis
         """
-        asset_data = context.get('asset_data', {})
-        usage_data = context.get('usage_data', {})
-        maintenance_history = context.get('maintenance_history', [])
+        asset_data = context.get("asset_data", {})
+        usage_data = context.get("usage_data", {})
+        maintenance_history = context.get("maintenance_history", [])
 
         # Calculate asset age
-        acquisition_date = asset_data.get('acquisition_date')
+        acquisition_date = asset_data.get("acquisition_date")
         if acquisition_date:
-            age_days = (datetime.utcnow() - datetime.fromisoformat(acquisition_date)).days
+            age_days = (
+                datetime.utcnow() - datetime.fromisoformat(acquisition_date)
+            ).days
         else:
             age_days = 0
 
         # Analyze usage intensity
-        usage_hours = usage_data.get('total_hours', 0)
-        usage_intensity = usage_data.get('intensity', 'normal')  # low, normal, high
+        usage_hours = usage_data.get("total_hours", 0)
+        usage_intensity = usage_data.get("intensity", "normal")  # low, normal, high
 
         # Days since last maintenance
         if maintenance_history:
             last_maintenance = max(
-                maintenance_history,
-                key=lambda x: x.get('completed_at', '1970-01-01')
+                maintenance_history, key=lambda x: x.get("completed_at", "1970-01-01")
             )
             last_maintenance_date = datetime.fromisoformat(
-                last_maintenance.get('completed_at', datetime.utcnow().isoformat())
+                last_maintenance.get("completed_at", datetime.utcnow().isoformat())
             )
             days_since_maintenance = (datetime.utcnow() - last_maintenance_date).days
         else:
@@ -153,9 +140,9 @@ class AssetMaintenanceHandler:
             condition_score -= 0.1
 
         # Usage factor
-        if usage_intensity == 'high':
+        if usage_intensity == "high":
             condition_score -= 0.2
-        elif usage_intensity == 'low':
+        elif usage_intensity == "low":
             condition_score += 0.1
 
         # Maintenance factor
@@ -167,18 +154,16 @@ class AssetMaintenanceHandler:
         condition_score = max(0, min(1, condition_score))
 
         return {
-            'score': condition_score,
-            'age_days': age_days,
-            'usage_hours': usage_hours,
-            'usage_intensity': usage_intensity,
-            'days_since_maintenance': days_since_maintenance,
-            'status': self._get_condition_status(condition_score)
+            "score": condition_score,
+            "age_days": age_days,
+            "usage_hours": usage_hours,
+            "usage_intensity": usage_intensity,
+            "days_since_maintenance": days_since_maintenance,
+            "status": self._get_condition_status(condition_score),
         }
 
     def _determine_urgency(
-        self,
-        asset_condition: Dict[str, Any],
-        context: Dict[str, Any]
+        self, asset_condition: Dict[str, Any], context: Dict[str, Any]
     ) -> str:
         """
         Determine maintenance urgency level.
@@ -190,29 +175,26 @@ class AssetMaintenanceHandler:
         Returns:
             Urgency level: 'low', 'medium', 'high', 'critical'
         """
-        condition_score = asset_condition['score']
-        days_since_maintenance = asset_condition['days_since_maintenance']
+        condition_score = asset_condition["score"]
+        days_since_maintenance = asset_condition["days_since_maintenance"]
 
         # Critical urgency
         if condition_score < 0.3 or days_since_maintenance > 365:
-            return 'critical'
+            return "critical"
 
         # High urgency
         if condition_score < 0.5 or days_since_maintenance > 180:
-            return 'high'
+            return "high"
 
         # Medium urgency
         if condition_score < 0.7 or days_since_maintenance > 90:
-            return 'medium'
+            return "medium"
 
         # Low urgency
-        return 'low'
+        return "low"
 
     def _calculate_maintenance_window(
-        self,
-        asset_id: str,
-        urgency: str,
-        context: Dict[str, Any]
+        self, asset_id: str, urgency: str, context: Dict[str, Any]
     ) -> Dict[str, str]:
         """
         Calculate optimal maintenance window.
@@ -228,15 +210,15 @@ class AssetMaintenanceHandler:
         now = datetime.utcnow()
 
         # Determine scheduling based on urgency
-        if urgency == 'critical':
+        if urgency == "critical":
             # Schedule immediately
             start = now + timedelta(hours=2)
             duration = timedelta(hours=4)
-        elif urgency == 'high':
+        elif urgency == "high":
             # Schedule within 24 hours
             start = now + timedelta(hours=12)
             duration = timedelta(hours=3)
-        elif urgency == 'medium':
+        elif urgency == "medium":
             # Schedule within 1 week
             start = now + timedelta(days=3)
             duration = timedelta(hours=2)
@@ -254,17 +236,14 @@ class AssetMaintenanceHandler:
 
         end = start + duration
 
-        return {
-            'start': start.isoformat(),
-            'end': end.isoformat()
-        }
+        return {"start": start.isoformat(), "end": end.isoformat()}
 
     def _estimate_maintenance(
         self,
         asset_id: str,
         maintenance_type: str,
         asset_condition: Dict[str, Any],
-        context: Dict[str, Any]
+        context: Dict[str, Any],
     ) -> Dict[str, Any]:
         """
         Estimate maintenance duration and cost.
@@ -280,16 +259,16 @@ class AssetMaintenanceHandler:
         """
         # Base estimates by maintenance type
         base_estimates = {
-            'preventive': {'hours': 2, 'cost': 500},
-            'corrective': {'hours': 4, 'cost': 1000},
-            'predictive': {'hours': 1, 'cost': 300},
-            'emergency': {'hours': 6, 'cost': 2000}
+            "preventive": {"hours": 2, "cost": 500},
+            "corrective": {"hours": 4, "cost": 1000},
+            "predictive": {"hours": 1, "cost": 300},
+            "emergency": {"hours": 6, "cost": 2000},
         }
 
-        base = base_estimates.get(maintenance_type, {'hours': 2, 'cost': 500})
+        base = base_estimates.get(maintenance_type, {"hours": 2, "cost": 500})
 
         # Adjust based on asset condition
-        condition_score = asset_condition['score']
+        condition_score = asset_condition["score"]
         if condition_score < 0.3:
             multiplier = 1.5
         elif condition_score < 0.5:
@@ -300,9 +279,9 @@ class AssetMaintenanceHandler:
             multiplier = 1.0
 
         return {
-            'duration_hours': base['hours'] * multiplier,
-            'cost': base['cost'] * multiplier,
-            'confidence': 0.8 if condition_score > 0.5 else 0.6
+            "duration_hours": base["hours"] * multiplier,
+            "cost": base["cost"] * multiplier,
+            "confidence": 0.8 if condition_score > 0.5 else 0.6,
         }
 
     def _generate_reasoning(
@@ -311,7 +290,7 @@ class AssetMaintenanceHandler:
         maintenance_type: str,
         urgency: str,
         asset_condition: Dict[str, Any],
-        estimates: Dict[str, Any]
+        estimates: Dict[str, Any],
     ) -> str:
         """
         Generate human-readable reasoning for maintenance decision.
@@ -326,8 +305,8 @@ class AssetMaintenanceHandler:
         Returns:
             Reasoning string
         """
-        condition_score = asset_condition['score']
-        days_since = asset_condition['days_since_maintenance']
+        condition_score = asset_condition["score"]
+        days_since = asset_condition["days_since_maintenance"]
 
         reasoning_parts = [
             f"Scheduled {maintenance_type} maintenance for asset {asset_id} with {urgency} urgency."
@@ -359,9 +338,7 @@ class AssetMaintenanceHandler:
         return " ".join(reasoning_parts)
 
     def _generate_maintenance_tasks(
-        self,
-        maintenance_type: str,
-        asset_condition: Dict[str, Any]
+        self, maintenance_type: str, asset_condition: Dict[str, Any]
     ) -> List[Dict[str, str]]:
         """
         Generate list of maintenance tasks to perform.
@@ -375,28 +352,28 @@ class AssetMaintenanceHandler:
         """
         tasks = []
 
-        if maintenance_type == 'preventive':
+        if maintenance_type == "preventive":
             tasks = [
-                {'task': 'Inspect hardware components', 'priority': 'high'},
-                {'task': 'Clean and lubricate moving parts', 'priority': 'medium'},
-                {'task': 'Update firmware/software', 'priority': 'high'},
-                {'task': 'Test functionality', 'priority': 'high'},
-                {'task': 'Document findings', 'priority': 'medium'}
+                {"task": "Inspect hardware components", "priority": "high"},
+                {"task": "Clean and lubricate moving parts", "priority": "medium"},
+                {"task": "Update firmware/software", "priority": "high"},
+                {"task": "Test functionality", "priority": "high"},
+                {"task": "Document findings", "priority": "medium"},
             ]
-        elif maintenance_type == 'corrective':
+        elif maintenance_type == "corrective":
             tasks = [
-                {'task': 'Diagnose issue', 'priority': 'critical'},
-                {'task': 'Replace faulty components', 'priority': 'critical'},
-                {'task': 'Test repairs', 'priority': 'high'},
-                {'task': 'Verify functionality', 'priority': 'high'},
-                {'task': 'Update maintenance log', 'priority': 'medium'}
+                {"task": "Diagnose issue", "priority": "critical"},
+                {"task": "Replace faulty components", "priority": "critical"},
+                {"task": "Test repairs", "priority": "high"},
+                {"task": "Verify functionality", "priority": "high"},
+                {"task": "Update maintenance log", "priority": "medium"},
             ]
-        elif maintenance_type == 'predictive':
+        elif maintenance_type == "predictive":
             tasks = [
-                {'task': 'Collect sensor data', 'priority': 'high'},
-                {'task': 'Analyze performance metrics', 'priority': 'high'},
-                {'task': 'Identify potential issues', 'priority': 'medium'},
-                {'task': 'Recommend preventive actions', 'priority': 'medium'}
+                {"task": "Collect sensor data", "priority": "high"},
+                {"task": "Analyze performance metrics", "priority": "high"},
+                {"task": "Identify potential issues", "priority": "medium"},
+                {"task": "Recommend preventive actions", "priority": "medium"},
             ]
 
         return tasks
@@ -405,20 +382,18 @@ class AssetMaintenanceHandler:
     def _get_condition_status(condition_score: float) -> str:
         """Get condition status label from score"""
         if condition_score >= 0.8:
-            return 'excellent'
+            return "excellent"
         elif condition_score >= 0.6:
-            return 'good'
+            return "good"
         elif condition_score >= 0.4:
-            return 'fair'
+            return "fair"
         elif condition_score >= 0.2:
-            return 'poor'
+            return "poor"
         else:
-            return 'critical'
+            return "critical"
 
     async def validate(
-        self,
-        details: Dict[str, Any],
-        context: Dict[str, Any]
+        self, details: Dict[str, Any], context: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
         Validate asset maintenance parameters before execution.
@@ -432,15 +407,12 @@ class AssetMaintenanceHandler:
         """
         errors = []
 
-        if not details.get('asset_id'):
+        if not details.get("asset_id"):
             errors.append("asset_id is required")
 
-        maintenance_type = details.get('maintenance_type', 'preventive')
-        valid_types = ['preventive', 'corrective', 'predictive', 'emergency']
+        maintenance_type = details.get("maintenance_type", "preventive")
+        valid_types = ["preventive", "corrective", "predictive", "emergency"]
         if maintenance_type not in valid_types:
             errors.append(f"maintenance_type must be one of: {', '.join(valid_types)}")
 
-        return {
-            'valid': len(errors) == 0,
-            'errors': errors
-        }
+        return {"valid": len(errors) == 0, "errors": errors}

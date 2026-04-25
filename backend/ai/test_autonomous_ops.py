@@ -8,13 +8,13 @@ import os
 import asyncio
 
 # Add backend to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
 from backend.governance import get_governance, initialize_governance
 from backend.ai.autonomous_ops import (
     AutonomousOperationsEngine,
     initialize_autonomous_engine,
-    OperationStatus
+    OperationStatus,
 )
 from backend.governance.approval_gates import RiskLevel, ApprovalStatus
 
@@ -52,41 +52,43 @@ async def test_low_risk_auto_approval():
 
     # Propose low-risk task assignment
     result = await engine.propose_operation(
-        operation_type='task_assignment',
+        operation_type="task_assignment",
         details={
-            'task_id': 'task_001',
-            'candidate_members': ['user_1', 'user_2', 'user_3'],
-            'summary': 'Assign routine documentation task'
+            "task_id": "task_001",
+            "candidate_members": ["user_1", "user_2", "user_3"],
+            "summary": "Assign routine documentation task",
         },
         context={
-            'impact_scope': 'single',
-            'financial_impact': 0,
-            'reversible': True,
-            'confidence': 0.85,
-            'workload_data': {
-                'user_1': {'active_tasks': 3, 'capacity': 10, 'urgent_tasks': 0},
-                'user_2': {'active_tasks': 5, 'capacity': 10, 'urgent_tasks': 1},
-                'user_3': {'active_tasks': 7, 'capacity': 10, 'urgent_tasks': 2}
+            "impact_scope": "single",
+            "financial_impact": 0,
+            "reversible": True,
+            "confidence": 0.85,
+            "workload_data": {
+                "user_1": {"active_tasks": 3, "capacity": 10, "urgent_tasks": 0},
+                "user_2": {"active_tasks": 5, "capacity": 10, "urgent_tasks": 1},
+                "user_3": {"active_tasks": 7, "capacity": 10, "urgent_tasks": 2},
             },
-            'required_skills': ['documentation'],
-            'member_skills': {
-                'user_1': ['documentation', 'writing'],
-                'user_2': ['coding', 'testing'],
-                'user_3': ['documentation', 'design']
-            }
-        }
+            "required_skills": ["documentation"],
+            "member_skills": {
+                "user_1": ["documentation", "writing"],
+                "user_2": ["coding", "testing"],
+                "user_3": ["documentation", "design"],
+            },
+        },
     )
 
-    operation = result['operation']
-    approval = result['approval_request']
+    operation = result["operation"]
+    approval = result["approval_request"]
 
     print(f"Operation ID: {operation['operation_id']}")
     print(f"Risk Level: {approval['risk_level']}")
     print(f"Approval Status: {approval['status']}")
 
-    assert approval['risk_level'] == RiskLevel.LOW, "Should be low risk"
-    assert approval['status'] == ApprovalStatus.AUTO_APPROVED, "Should be auto-approved"
-    assert operation['status'] == OperationStatus.APPROVED, "Operation should be approved"
+    assert approval["risk_level"] == RiskLevel.LOW, "Should be low risk"
+    assert approval["status"] == ApprovalStatus.AUTO_APPROVED, "Should be auto-approved"
+    assert (
+        operation["status"] == OperationStatus.APPROVED
+    ), "Operation should be approved"
 
     print("\n✅ PASSED: Low-risk auto-approval\n")
 
@@ -102,40 +104,40 @@ async def test_high_risk_requires_approval():
 
     # Propose high-risk asset retirement
     result = await engine.propose_operation(
-        operation_type='asset_maintenance',
+        operation_type="asset_maintenance",
         details={
-            'asset_id': 'asset_critical_001',
-            'maintenance_type': 'emergency',
-            'summary': 'Emergency maintenance on critical server'
+            "asset_id": "asset_critical_001",
+            "maintenance_type": "emergency",
+            "summary": "Emergency maintenance on critical server",
         },
         context={
-            'impact_scope': 'organization',
-            'financial_impact': 15000,
-            'reversible': False,
-            'confidence': 0.75,
-            'asset_data': {
-                'acquisition_date': '2020-01-01T00:00:00',
-                'lifecycle_stage': 'operational'
+            "impact_scope": "organization",
+            "financial_impact": 15000,
+            "reversible": False,
+            "confidence": 0.75,
+            "asset_data": {
+                "acquisition_date": "2020-01-01T00:00:00",
+                "lifecycle_stage": "operational",
             },
-            'usage_data': {
-                'total_hours': 15000,
-                'intensity': 'high'
-            },
-            'maintenance_history': []
-        }
+            "usage_data": {"total_hours": 15000, "intensity": "high"},
+            "maintenance_history": [],
+        },
     )
 
-    operation = result['operation']
-    approval = result['approval_request']
+    operation = result["operation"]
+    approval = result["approval_request"]
 
     print(f"Operation ID: {operation['operation_id']}")
     print(f"Risk Level: {approval['risk_level']}")
     print(f"Approval Status: {approval['status']}")
     print(f"Requires approval: {approval.get('timeout_seconds', 0) > 0}")
 
-    assert approval['risk_level'] in [RiskLevel.HIGH, RiskLevel.CRITICAL], "Should be high/critical risk"
-    assert approval['status'] == ApprovalStatus.PENDING, "Should require approval"
-    assert operation['status'] == OperationStatus.PENDING, "Operation should be pending"
+    assert approval["risk_level"] in [
+        RiskLevel.HIGH,
+        RiskLevel.CRITICAL,
+    ], "Should be high/critical risk"
+    assert approval["status"] == ApprovalStatus.PENDING, "Should require approval"
+    assert operation["status"] == OperationStatus.PENDING, "Operation should be pending"
 
     print("\n✅ PASSED: High-risk requires approval\n")
 
@@ -151,30 +153,30 @@ async def test_task_assignment_execution():
 
     # Propose and execute task assignment
     result = await engine.propose_operation(
-        operation_type='task_assignment',
+        operation_type="task_assignment",
         details={
-            'task_id': 'task_002',
-            'candidate_members': ['user_1', 'user_2'],
-            'summary': 'Assign code review task'
+            "task_id": "task_002",
+            "candidate_members": ["user_1", "user_2"],
+            "summary": "Assign code review task",
         },
         context={
-            'impact_scope': 'single',
-            'financial_impact': 0,
-            'reversible': True,
-            'confidence': 0.90,
-            'workload_data': {
-                'user_1': {'active_tasks': 2, 'capacity': 10, 'urgent_tasks': 0},
-                'user_2': {'active_tasks': 8, 'capacity': 10, 'urgent_tasks': 3}
+            "impact_scope": "single",
+            "financial_impact": 0,
+            "reversible": True,
+            "confidence": 0.90,
+            "workload_data": {
+                "user_1": {"active_tasks": 2, "capacity": 10, "urgent_tasks": 0},
+                "user_2": {"active_tasks": 8, "capacity": 10, "urgent_tasks": 3},
             },
-            'required_skills': ['code_review', 'python'],
-            'member_skills': {
-                'user_1': ['code_review', 'python', 'testing'],
-                'user_2': ['code_review', 'javascript']
-            }
-        }
+            "required_skills": ["code_review", "python"],
+            "member_skills": {
+                "user_1": ["code_review", "python", "testing"],
+                "user_2": ["code_review", "javascript"],
+            },
+        },
     )
 
-    operation_id = result['operation']['operation_id']
+    operation_id = result["operation"]["operation_id"]
 
     # Execute the approved operation
     exec_result = await engine.execute_operation(operation_id)
@@ -184,9 +186,12 @@ async def test_task_assignment_execution():
     print(f"Assigned To: {exec_result['result']['assigned_to']}")
     print(f"Confidence: {exec_result['result']['confidence']:.2f}")
 
-    assert exec_result['success'], "Execution should succeed"
-    assert exec_result['result']['assigned_to'] in ['user_1', 'user_2'], "Should assign to valid user"
-    assert exec_result['result']['confidence'] > 0, "Should have confidence score"
+    assert exec_result["success"], "Execution should succeed"
+    assert exec_result["result"]["assigned_to"] in [
+        "user_1",
+        "user_2",
+    ], "Should assign to valid user"
+    assert exec_result["result"]["confidence"] > 0, "Should have confidence score"
 
     print("\n✅ PASSED: Task assignment execution\n")
 
@@ -202,45 +207,48 @@ async def test_asset_maintenance_execution():
 
     # Propose and execute asset maintenance (low risk to ensure auto-approval)
     result = await engine.propose_operation(
-        operation_type='asset_maintenance',
+        operation_type="asset_maintenance",
         details={
-            'asset_id': 'asset_laptop_042',
-            'maintenance_type': 'preventive',
-            'summary': 'Scheduled preventive maintenance'
+            "asset_id": "asset_laptop_042",
+            "maintenance_type": "preventive",
+            "summary": "Scheduled preventive maintenance",
         },
         context={
-            'impact_scope': 'single',
-            'financial_impact': 200,  # Low financial impact
-            'reversible': True,
-            'confidence': 0.90,  # High confidence
-            'asset_data': {
-                'acquisition_date': '2025-01-01T00:00:00',  # Recent asset
-                'lifecycle_stage': 'operational'
+            "impact_scope": "single",
+            "financial_impact": 200,  # Low financial impact
+            "reversible": True,
+            "confidence": 0.90,  # High confidence
+            "asset_data": {
+                "acquisition_date": "2025-01-01T00:00:00",  # Recent asset
+                "lifecycle_stage": "operational",
             },
-            'usage_data': {
-                'total_hours': 500,  # Low usage
-                'intensity': 'low'  # Low intensity
+            "usage_data": {
+                "total_hours": 500,  # Low usage
+                "intensity": "low",  # Low intensity
             },
-            'maintenance_history': [
-                {'completed_at': '2026-03-01T00:00:00', 'type': 'preventive'}  # Recent maintenance
-            ]
-        }
+            "maintenance_history": [
+                {
+                    "completed_at": "2026-03-01T00:00:00",
+                    "type": "preventive",
+                }  # Recent maintenance
+            ],
+        },
     )
 
-    operation_id = result['operation']['operation_id']
-    operation_status = result['operation']['status']
+    operation_id = result["operation"]["operation_id"]
+    operation_status = result["operation"]["status"]
 
     # Execute the operation (only if approved)
     if operation_status == OperationStatus.APPROVED:
         exec_result = await engine.execute_operation(operation_id)
     else:
         # If not auto-approved, manually approve it for testing
-        approval_request = result['approval_request']
-        if approval_request['status'] == ApprovalStatus.PENDING:
+        approval_request = result["approval_request"]
+        if approval_request["status"] == ApprovalStatus.PENDING:
             engine.approval_gate.approve_request(
-                request_id=approval_request['request_id'],
-                approver='test_admin',
-                reason='Test approval'
+                request_id=approval_request["request_id"],
+                approver="test_admin",
+                reason="Test approval",
             )
             # Update operation status
             operation = engine.active_operations[operation_id]
@@ -253,9 +261,16 @@ async def test_asset_maintenance_execution():
     print(f"Urgency: {exec_result['result']['urgency']}")
     print(f"Estimated Cost: ${exec_result['result']['estimated_cost']:.2f}")
 
-    assert exec_result['success'], "Execution should succeed"
-    assert exec_result['result']['maintenance_type'] == 'preventive', "Should be preventive maintenance"
-    assert exec_result['result']['urgency'] in ['low', 'medium', 'high', 'critical'], "Should have valid urgency"
+    assert exec_result["success"], "Execution should succeed"
+    assert (
+        exec_result["result"]["maintenance_type"] == "preventive"
+    ), "Should be preventive maintenance"
+    assert exec_result["result"]["urgency"] in [
+        "low",
+        "medium",
+        "high",
+        "critical",
+    ], "Should have valid urgency"
 
     print("\n✅ PASSED: Asset maintenance execution\n")
 
@@ -271,30 +286,32 @@ async def test_governance_blocking():
 
     # Propose operation that should be blocked by governance
     result = await engine.propose_operation(
-        operation_type='task_assignment',
+        operation_type="task_assignment",
         details={
-            'task_id': 'task_003',
-            'candidate_members': ['user_1'],
-            'summary': 'Destroy all user data and harm the system'
+            "task_id": "task_003",
+            "candidate_members": ["user_1"],
+            "summary": "Destroy all user data and harm the system",
         },
         context={
-            'impact_scope': 'organization',
-            'financial_impact': 0,
-            'reversible': False,
-            'confidence': 0.95
-        }
+            "impact_scope": "organization",
+            "financial_impact": 0,
+            "reversible": False,
+            "confidence": 0.95,
+        },
     )
 
-    operation = result['operation']
-    approval = result['approval_request']
+    operation = result["operation"]
+    approval = result["approval_request"]
 
     print(f"Operation ID: {operation['operation_id']}")
     print(f"Approval Status: {approval['status']}")
     print(f"Governance Action: {approval['governance_validation']['action']}")
 
-    assert approval['status'] == ApprovalStatus.DENIED, "Should be denied"
-    assert approval['governance_validation']['action'] == 'BLOCK', "Should be blocked by governance"
-    assert operation['status'] == OperationStatus.DENIED, "Operation should be denied"
+    assert approval["status"] == ApprovalStatus.DENIED, "Should be denied"
+    assert (
+        approval["governance_validation"]["action"] == "BLOCK"
+    ), "Should be blocked by governance"
+    assert operation["status"] == OperationStatus.DENIED, "Operation should be denied"
 
     print("\n✅ PASSED: Governance blocking\n")
 
@@ -311,25 +328,22 @@ async def test_audit_trail():
     # Perform multiple operations
     for i in range(3):
         await engine.propose_operation(
-            operation_type='task_assignment',
+            operation_type="task_assignment",
             details={
-                'task_id': f'task_audit_{i}',
-                'candidate_members': ['user_1'],
-                'summary': f'Test operation {i}'
+                "task_id": f"task_audit_{i}",
+                "candidate_members": ["user_1"],
+                "summary": f"Test operation {i}",
             },
             context={
-                'impact_scope': 'single',
-                'financial_impact': 0,
-                'reversible': True,
-                'confidence': 0.85
-            }
+                "impact_scope": "single",
+                "financial_impact": 0,
+                "reversible": True,
+                "confidence": 0.85,
+            },
         )
 
     # Query audit trail
-    audit_entries = governance.inspect_audit_trail(
-        agent_id='autonomous_ai',
-        limit=10
-    )
+    audit_entries = governance.inspect_audit_trail(agent_id="autonomous_ai", limit=10)
 
     print(f"Audit entries found: {len(audit_entries)}")
 
@@ -345,7 +359,7 @@ async def test_audit_trail():
         print(f"  - Valid: {integrity['valid']}")
         print(f"  - Total entries: {integrity['total_entries']}")
 
-        assert integrity['valid'], "Audit chain should be valid"
+        assert integrity["valid"], "Audit chain should be valid"
 
     print("\n✅ PASSED: Audit trail\n")
 
@@ -369,8 +383,8 @@ async def test_operation_statistics():
     print(f"  - Success rate: {stats['success_rate']:.2%}")
     print(f"  - Pending approvals: {stats['pending_approvals']}")
 
-    assert 'total_operations' in stats, "Should have total operations"
-    assert 'success_rate' in stats, "Should have success rate"
+    assert "total_operations" in stats, "Should have total operations"
+    assert "success_rate" in stats, "Should have success rate"
 
     print("\n✅ PASSED: Operation statistics\n")
 
@@ -386,41 +400,43 @@ async def test_approval_workflow():
 
     # Propose high-risk operation
     result = await engine.propose_operation(
-        operation_type='asset_maintenance',
+        operation_type="asset_maintenance",
         details={
-            'asset_id': 'asset_server_001',
-            'maintenance_type': 'corrective',
-            'summary': 'Critical server repair'
+            "asset_id": "asset_server_001",
+            "maintenance_type": "corrective",
+            "summary": "Critical server repair",
         },
         context={
-            'impact_scope': 'department',
-            'financial_impact': 8000,
-            'reversible': False,
-            'confidence': 0.70,
-            'asset_data': {'acquisition_date': '2019-01-01T00:00:00'},
-            'usage_data': {'total_hours': 20000, 'intensity': 'high'},
-            'maintenance_history': []
-        }
+            "impact_scope": "department",
+            "financial_impact": 8000,
+            "reversible": False,
+            "confidence": 0.70,
+            "asset_data": {"acquisition_date": "2019-01-01T00:00:00"},
+            "usage_data": {"total_hours": 20000, "intensity": "high"},
+            "maintenance_history": [],
+        },
     )
 
-    approval_request = result['approval_request']
-    request_id = approval_request['request_id']
+    approval_request = result["approval_request"]
+    request_id = approval_request["request_id"]
 
     print(f"Request ID: {request_id}")
     print(f"Initial Status: {approval_request['status']}")
 
-    if approval_request['status'] == ApprovalStatus.PENDING:
+    if approval_request["status"] == ApprovalStatus.PENDING:
         # Simulate approval
         approved_request = engine.approval_gate.approve_request(
             request_id=request_id,
-            approver='admin@example.com',
-            reason='Approved after review'
+            approver="admin@example.com",
+            reason="Approved after review",
         )
 
         print(f"After Approval: {approved_request['status']}")
         print(f"Approver: {approved_request['approver']}")
 
-        assert approved_request['status'] == ApprovalStatus.APPROVED, "Should be approved"
+        assert (
+            approved_request["status"] == ApprovalStatus.APPROVED
+        ), "Should be approved"
 
     print("\n✅ PASSED: Manual approval workflow\n")
 
@@ -440,7 +456,7 @@ async def run_all_tests():
         test_governance_blocking,
         test_audit_trail,
         test_operation_statistics,
-        test_approval_workflow
+        test_approval_workflow,
     ]
 
     passed = 0

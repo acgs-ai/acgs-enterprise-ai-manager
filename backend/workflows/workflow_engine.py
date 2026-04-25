@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 class WorkflowStatus(str, Enum):
     """Workflow execution status."""
+
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -27,6 +28,7 @@ class WorkflowStatus(str, Enum):
 
 class StepStatus(str, Enum):
     """Workflow step status."""
+
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -37,6 +39,7 @@ class StepStatus(str, Enum):
 @dataclass
 class WorkflowStep:
     """Individual step in a workflow."""
+
     name: str
     handler: Callable
     description: str = ""
@@ -51,6 +54,7 @@ class WorkflowStep:
 @dataclass
 class WorkflowExecution:
     """Tracks a workflow execution instance."""
+
     workflow_id: str
     execution_id: UUID = field(default_factory=uuid4)
     status: WorkflowStatus = WorkflowStatus.PENDING
@@ -75,18 +79,11 @@ class Workflow:
         self.trigger_events: List[EventType] = []
 
     def add_step(
-        self,
-        name: str,
-        handler: Callable,
-        description: str = "",
-        max_retries: int = 3
+        self, name: str, handler: Callable, description: str = "", max_retries: int = 3
     ):
         """Add a step to the workflow."""
         step = WorkflowStep(
-            name=name,
-            handler=handler,
-            description=description,
-            max_retries=max_retries
+            name=name, handler=handler, description=description, max_retries=max_retries
         )
         self.steps.append(step)
         return self
@@ -115,7 +112,9 @@ class WorkflowEngine:
             workflow: Workflow to register
         """
         self.workflows[workflow.workflow_id] = workflow
-        logger.info(f"Registered workflow: {workflow.name} (ID: {workflow.workflow_id})")
+        logger.info(
+            f"Registered workflow: {workflow.name} (ID: {workflow.workflow_id})"
+        )
 
         # Subscribe to trigger events
         for event_type in workflow.trigger_events:
@@ -124,16 +123,20 @@ class WorkflowEngine:
 
     def _create_event_handler(self, workflow: Workflow):
         """Create an event handler for a workflow."""
+
         async def handler(event: Event):
-            logger.info(f"Workflow {workflow.name} triggered by event {event.event_type}")
+            logger.info(
+                f"Workflow {workflow.name} triggered by event {event.event_type}"
+            )
             await self.execute_workflow(workflow.workflow_id, event)
+
         return handler
 
     async def execute_workflow(
         self,
         workflow_id: str,
         trigger_event: Optional[Event] = None,
-        initial_context: Optional[Dict[str, Any]] = None
+        initial_context: Optional[Dict[str, Any]] = None,
     ) -> WorkflowExecution:
         """
         Execute a workflow.
@@ -153,26 +156,31 @@ class WorkflowEngine:
         # Create execution instance
         execution = WorkflowExecution(
             workflow_id=workflow_id,
-            steps=[WorkflowStep(
-                name=step.name,
-                handler=step.handler,
-                description=step.description,
-                max_retries=step.max_retries
-            ) for step in workflow.steps],
+            steps=[
+                WorkflowStep(
+                    name=step.name,
+                    handler=step.handler,
+                    description=step.description,
+                    max_retries=step.max_retries,
+                )
+                for step in workflow.steps
+            ],
             context=initial_context or {},
             trigger_event=trigger_event,
-            started_at=datetime.utcnow()
+            started_at=datetime.utcnow(),
         )
 
         # Add trigger event data to context
         if trigger_event:
-            execution.context['trigger_event'] = trigger_event.payload
-            execution.context['event_id'] = str(trigger_event.event_id)
+            execution.context["trigger_event"] = trigger_event.payload
+            execution.context["event_id"] = str(trigger_event.event_id)
 
         self.executions[execution.execution_id] = execution
         execution.status = WorkflowStatus.RUNNING
 
-        logger.info(f"Starting workflow execution: {workflow.name} (Execution ID: {execution.execution_id})")
+        logger.info(
+            f"Starting workflow execution: {workflow.name} (Execution ID: {execution.execution_id})"
+        )
 
         try:
             # Execute steps sequentially
@@ -191,7 +199,9 @@ class WorkflowEngine:
         except Exception as e:
             execution.status = WorkflowStatus.FAILED
             execution.error = str(e)
-            logger.error(f"Workflow execution failed: {workflow.name} - {e}", exc_info=True)
+            logger.error(
+                f"Workflow execution failed: {workflow.name} - {e}", exc_info=True
+            )
 
         execution.completed_at = datetime.utcnow()
         return execution
@@ -220,7 +230,9 @@ class WorkflowEngine:
             except Exception as e:
                 step.retry_count += 1
                 step.error = str(e)
-                logger.error(f"Step {step.name} failed (attempt {step.retry_count}/{step.max_retries}): {e}")
+                logger.error(
+                    f"Step {step.name} failed (attempt {step.retry_count}/{step.max_retries}): {e}"
+                )
 
                 if step.retry_count > step.max_retries:
                     step.status = StepStatus.FAILED
@@ -228,7 +240,7 @@ class WorkflowEngine:
                     return
 
                 # Wait before retry
-                await asyncio.sleep(2 ** step.retry_count)
+                await asyncio.sleep(2**step.retry_count)
 
     def get_execution(self, execution_id: UUID) -> Optional[WorkflowExecution]:
         """Get a workflow execution by ID."""

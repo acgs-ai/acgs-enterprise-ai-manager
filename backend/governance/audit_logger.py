@@ -11,7 +11,6 @@ from datetime import datetime
 from pathlib import Path
 import os
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -32,10 +31,7 @@ class AuditLogger:
             audit_dir: Directory for audit logs (default: backend/governance/audit_logs)
         """
         if audit_dir is None:
-            audit_dir = os.path.join(
-                os.path.dirname(__file__),
-                "audit_logs"
-            )
+            audit_dir = os.path.join(os.path.dirname(__file__), "audit_logs")
 
         self.audit_dir = Path(audit_dir)
         self.audit_dir.mkdir(parents=True, exist_ok=True)
@@ -56,11 +52,11 @@ class AuditLogger:
             return "GENESIS"
 
         try:
-            with open(self.current_log_file, 'r') as f:
+            with open(self.current_log_file, "r") as f:
                 lines = f.readlines()
                 if lines:
                     last_entry = json.loads(lines[-1])
-                    return last_entry.get('entry_hash', 'GENESIS')
+                    return last_entry.get("entry_hash", "GENESIS")
         except Exception as e:
             logger.error(f"Error reading last hash: {e}")
 
@@ -78,7 +74,7 @@ class AuditLogger:
         """
         # Create deterministic JSON string
         entry_copy = entry.copy()
-        entry_copy.pop('entry_hash', None)  # Remove hash field if present
+        entry_copy.pop("entry_hash", None)  # Remove hash field if present
 
         entry_json = json.dumps(entry_copy, sort_keys=True)
         return hashlib.sha256(entry_json.encode()).hexdigest()
@@ -94,18 +90,18 @@ class AuditLogger:
             Entry hash
         """
         # Add chain metadata
-        entry['previous_hash'] = self.last_hash
-        entry['entry_hash'] = self._compute_entry_hash(entry)
+        entry["previous_hash"] = self.last_hash
+        entry["entry_hash"] = self._compute_entry_hash(entry)
 
         # Write to log file (append mode)
         try:
-            with open(self.current_log_file, 'a') as f:
-                f.write(json.dumps(entry) + '\n')
+            with open(self.current_log_file, "a") as f:
+                f.write(json.dumps(entry) + "\n")
 
             # Update last hash for next entry
-            self.last_hash = entry['entry_hash']
+            self.last_hash = entry["entry_hash"]
 
-            return entry['entry_hash']
+            return entry["entry_hash"]
 
         except Exception as e:
             logger.error(f"Failed to write audit entry: {e}")
@@ -117,7 +113,7 @@ class AuditLogger:
         context: Dict[str, Any],
         validation_result: Dict[str, Any],
         agent_id: str,
-        duration_ms: float
+        duration_ms: float,
     ) -> str:
         """
         Log a governance decision to audit trail.
@@ -133,18 +129,18 @@ class AuditLogger:
             Decision ID (entry hash)
         """
         entry = {
-            'type': 'DECISION',
-            'timestamp': datetime.utcnow().isoformat(),
-            'agent_id': agent_id,
-            'operation': operation[:500],  # Truncate for storage
-            'context': self._sanitize_context(context),
-            'validation_result': {
-                'valid': validation_result.get('valid'),
-                'action': validation_result.get('action'),
-                'violations': validation_result.get('violations', []),
-                'matched_rules': validation_result.get('matched_rules', [])
+            "type": "DECISION",
+            "timestamp": datetime.utcnow().isoformat(),
+            "agent_id": agent_id,
+            "operation": operation[:500],  # Truncate for storage
+            "context": self._sanitize_context(context),
+            "validation_result": {
+                "valid": validation_result.get("valid"),
+                "action": validation_result.get("action"),
+                "violations": validation_result.get("violations", []),
+                "matched_rules": validation_result.get("matched_rules", []),
             },
-            'duration_ms': duration_ms
+            "duration_ms": duration_ms,
         }
 
         decision_id = self._write_audit_entry(entry)
@@ -163,14 +159,14 @@ class AuditLogger:
             Entry hash
         """
         entry = {
-            'type': 'APPROVAL_REQUEST',
-            'timestamp': datetime.utcnow().isoformat(),
-            'request_id': approval_request['request_id'],
-            'agent_id': approval_request['agent_id'],
-            'operation': approval_request['operation'][:500],
-            'context': self._sanitize_context(approval_request.get('context', {})),
-            'timeout_seconds': approval_request['timeout_seconds'],
-            'status': approval_request['status']
+            "type": "APPROVAL_REQUEST",
+            "timestamp": datetime.utcnow().isoformat(),
+            "request_id": approval_request["request_id"],
+            "agent_id": approval_request["agent_id"],
+            "operation": approval_request["operation"][:500],
+            "context": self._sanitize_context(approval_request.get("context", {})),
+            "timeout_seconds": approval_request["timeout_seconds"],
+            "status": approval_request["status"],
         }
 
         entry_hash = self._write_audit_entry(entry)
@@ -183,7 +179,7 @@ class AuditLogger:
         request_id: str,
         approved: bool,
         approver: str,
-        reason: Optional[str] = None
+        reason: Optional[str] = None,
     ) -> str:
         """
         Log an approval response to audit trail.
@@ -198,25 +194,22 @@ class AuditLogger:
             Entry hash
         """
         entry = {
-            'type': 'APPROVAL_RESPONSE',
-            'timestamp': datetime.utcnow().isoformat(),
-            'request_id': request_id,
-            'approved': approved,
-            'approver': approver,
-            'reason': reason
+            "type": "APPROVAL_RESPONSE",
+            "timestamp": datetime.utcnow().isoformat(),
+            "request_id": request_id,
+            "approved": approved,
+            "approver": approver,
+            "reason": reason,
         }
 
         entry_hash = self._write_audit_entry(entry)
-        logger.info(f"Logged approval response: {request_id} - {'APPROVED' if approved else 'DENIED'}")
+        logger.info(
+            f"Logged approval response: {request_id} - {'APPROVED' if approved else 'DENIED'}"
+        )
 
         return entry_hash
 
-    def log_enforcement(
-        self,
-        operation: str,
-        action: str,
-        reason: Any
-    ) -> str:
+    def log_enforcement(self, operation: str, action: str, reason: Any) -> str:
         """
         Log enforcement action to audit trail.
 
@@ -229,11 +222,11 @@ class AuditLogger:
             Entry hash
         """
         entry = {
-            'type': 'ENFORCEMENT',
-            'timestamp': datetime.utcnow().isoformat(),
-            'operation': operation[:500],
-            'action': action,
-            'reason': str(reason)[:1000]
+            "type": "ENFORCEMENT",
+            "timestamp": datetime.utcnow().isoformat(),
+            "operation": operation[:500],
+            "action": action,
+            "reason": str(reason)[:1000],
         }
 
         entry_hash = self._write_audit_entry(entry)
@@ -247,7 +240,7 @@ class AuditLogger:
         start_time: Optional[datetime] = None,
         end_time: Optional[datetime] = None,
         entry_type: Optional[str] = None,
-        limit: int = 100
+        limit: int = 100,
     ) -> List[Dict[str, Any]]:
         """
         Query audit trail with filters.
@@ -269,7 +262,7 @@ class AuditLogger:
 
         for log_file in log_files:
             try:
-                with open(log_file, 'r') as f:
+                with open(log_file, "r") as f:
                     for line in f:
                         if len(results) >= limit:
                             break
@@ -277,13 +270,13 @@ class AuditLogger:
                         entry = json.loads(line)
 
                         # Apply filters
-                        if agent_id and entry.get('agent_id') != agent_id:
+                        if agent_id and entry.get("agent_id") != agent_id:
                             continue
 
-                        if entry_type and entry.get('type') != entry_type:
+                        if entry_type and entry.get("type") != entry_type:
                             continue
 
-                        entry_time = datetime.fromisoformat(entry['timestamp'])
+                        entry_time = datetime.fromisoformat(entry["timestamp"])
 
                         if start_time and entry_time < start_time:
                             continue
@@ -316,48 +309,49 @@ class AuditLogger:
 
         for log_file in log_files:
             try:
-                with open(log_file, 'r') as f:
+                with open(log_file, "r") as f:
                     for line_num, line in enumerate(f, 1):
                         entry = json.loads(line)
                         total_entries += 1
 
                         # Verify previous hash matches
-                        if entry.get('previous_hash') != previous_hash:
-                            broken_links.append({
-                                'file': str(log_file),
-                                'line': line_num,
-                                'expected_previous': previous_hash,
-                                'actual_previous': entry.get('previous_hash')
-                            })
+                        if entry.get("previous_hash") != previous_hash:
+                            broken_links.append(
+                                {
+                                    "file": str(log_file),
+                                    "line": line_num,
+                                    "expected_previous": previous_hash,
+                                    "actual_previous": entry.get("previous_hash"),
+                                }
+                            )
 
                         # Verify entry hash
-                        stored_hash = entry.get('entry_hash')
+                        stored_hash = entry.get("entry_hash")
                         computed_hash = self._compute_entry_hash(entry)
 
                         if stored_hash != computed_hash:
-                            broken_links.append({
-                                'file': str(log_file),
-                                'line': line_num,
-                                'type': 'hash_mismatch',
-                                'expected_hash': computed_hash,
-                                'actual_hash': stored_hash
-                            })
+                            broken_links.append(
+                                {
+                                    "file": str(log_file),
+                                    "line": line_num,
+                                    "type": "hash_mismatch",
+                                    "expected_hash": computed_hash,
+                                    "actual_hash": stored_hash,
+                                }
+                            )
 
                         previous_hash = stored_hash
 
             except Exception as e:
                 logger.error(f"Error verifying {log_file}: {e}")
-                broken_links.append({
-                    'file': str(log_file),
-                    'error': str(e)
-                })
+                broken_links.append({"file": str(log_file), "error": str(e)})
 
         valid = len(broken_links) == 0
 
         return {
-            'valid': valid,
-            'total_entries': total_entries,
-            'broken_links': broken_links
+            "valid": valid,
+            "total_entries": total_entries,
+            "broken_links": broken_links,
         }
 
     @staticmethod
@@ -372,11 +366,11 @@ class AuditLogger:
             Sanitized context
         """
         sanitized = {}
-        sensitive_keys = {'password', 'token', 'secret', 'api_key', 'credential'}
+        sensitive_keys = {"password", "token", "secret", "api_key", "credential"}
 
         for key, value in context.items():
             if any(sensitive in key.lower() for sensitive in sensitive_keys):
-                sanitized[key] = '***REDACTED***'
+                sanitized[key] = "***REDACTED***"
             else:
                 sanitized[key] = value
 

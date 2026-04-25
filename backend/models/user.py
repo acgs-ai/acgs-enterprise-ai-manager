@@ -14,6 +14,7 @@ from backend.database import Base
 
 class User(Base):
     """User model."""
+
     __tablename__ = "users"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -23,7 +24,9 @@ class User(Base):
     permissions = Column(JSON, default=[])
     team = Column(String(100))
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
-    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(
+        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
+    )
     is_active = Column(Boolean, default=True)
 
     # Relationships

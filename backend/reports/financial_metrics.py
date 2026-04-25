@@ -18,10 +18,7 @@ class FinancialMetrics:
     """Calculate financial-related metrics for reporting."""
 
     @staticmethod
-    async def get_burn_rate(
-        db: AsyncSession,
-        days: int = 30
-    ) -> Dict[str, Any]:
+    async def get_burn_rate(db: AsyncSession, days: int = 30) -> Dict[str, Any]:
         """
         Calculate financial burn rate.
 
@@ -37,12 +34,12 @@ class FinancialMetrics:
 
         # Get total expenses in period
         expense_query = select(
-            func.sum(FinancialRecord.amount).label('total_expenses')
+            func.sum(FinancialRecord.amount).label("total_expenses")
         ).where(
             and_(
-                FinancialRecord.transaction_type == 'expense',
+                FinancialRecord.transaction_type == "expense",
                 FinancialRecord.transaction_date >= start_date,
-                FinancialRecord.transaction_date <= end_date
+                FinancialRecord.transaction_date <= end_date,
             )
         )
 
@@ -54,19 +51,19 @@ class FinancialMetrics:
         monthly_burn_rate = daily_burn_rate * 30
 
         return {
-            'period_days': days,
-            'total_expenses': float(total_expenses),
-            'daily_burn_rate': round(daily_burn_rate, 2),
-            'monthly_burn_rate': round(monthly_burn_rate, 2),
-            'start_date': start_date.isoformat(),
-            'end_date': end_date.isoformat()
+            "period_days": days,
+            "total_expenses": float(total_expenses),
+            "daily_burn_rate": round(daily_burn_rate, 2),
+            "monthly_burn_rate": round(monthly_burn_rate, 2),
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat(),
         }
 
     @staticmethod
     async def get_revenue_metrics(
         db: AsyncSession,
         start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None
+        end_date: Optional[datetime] = None,
     ) -> Dict[str, Any]:
         """
         Get revenue metrics.
@@ -79,7 +76,7 @@ class FinancialMetrics:
         Returns:
             Dict with revenue metrics
         """
-        filters = [FinancialRecord.transaction_type == 'income']
+        filters = [FinancialRecord.transaction_type == "income"]
 
         if start_date:
             filters.append(FinancialRecord.transaction_date >= start_date)
@@ -88,33 +85,34 @@ class FinancialMetrics:
 
         # Total revenue
         revenue_query = select(
-            func.sum(FinancialRecord.amount).label('total_revenue')
+            func.sum(FinancialRecord.amount).label("total_revenue")
         ).where(and_(*filters))
 
         result = await db.execute(revenue_query)
         total_revenue = result.scalar() or 0
 
         # Revenue by category
-        category_query = select(
-            FinancialRecord.category,
-            func.sum(FinancialRecord.amount).label('amount')
-        ).where(and_(*filters)).group_by(FinancialRecord.category)
+        category_query = (
+            select(
+                FinancialRecord.category,
+                func.sum(FinancialRecord.amount).label("amount"),
+            )
+            .where(and_(*filters))
+            .group_by(FinancialRecord.category)
+        )
 
         result = await db.execute(category_query)
         rows = result.all()
 
         by_category = {row.category: float(row.amount) for row in rows}
 
-        return {
-            'total_revenue': float(total_revenue),
-            'by_category': by_category
-        }
+        return {"total_revenue": float(total_revenue), "by_category": by_category}
 
     @staticmethod
     async def get_expense_breakdown(
         db: AsyncSession,
         start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None
+        end_date: Optional[datetime] = None,
     ) -> Dict[str, Any]:
         """
         Get expense breakdown by category.
@@ -127,7 +125,7 @@ class FinancialMetrics:
         Returns:
             Dict with expense breakdown
         """
-        filters = [FinancialRecord.transaction_type == 'expense']
+        filters = [FinancialRecord.transaction_type == "expense"]
 
         if start_date:
             filters.append(FinancialRecord.transaction_date >= start_date)
@@ -135,34 +133,35 @@ class FinancialMetrics:
             filters.append(FinancialRecord.transaction_date <= end_date)
 
         # Total expenses
-        total_query = select(
-            func.sum(FinancialRecord.amount).label('total')
-        ).where(and_(*filters))
+        total_query = select(func.sum(FinancialRecord.amount).label("total")).where(
+            and_(*filters)
+        )
 
         result = await db.execute(total_query)
         total_expenses = result.scalar() or 0
 
         # Expenses by category
-        category_query = select(
-            FinancialRecord.category,
-            func.sum(FinancialRecord.amount).label('amount')
-        ).where(and_(*filters)).group_by(FinancialRecord.category)
+        category_query = (
+            select(
+                FinancialRecord.category,
+                func.sum(FinancialRecord.amount).label("amount"),
+            )
+            .where(and_(*filters))
+            .group_by(FinancialRecord.category)
+        )
 
         result = await db.execute(category_query)
         rows = result.all()
 
         by_category = {row.category: float(row.amount) for row in rows}
 
-        return {
-            'total_expenses': float(total_expenses),
-            'by_category': by_category
-        }
+        return {"total_expenses": float(total_expenses), "by_category": by_category}
 
     @staticmethod
     async def get_profit_loss(
         db: AsyncSession,
         start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None
+        end_date: Optional[datetime] = None,
     ) -> Dict[str, Any]:
         """
         Calculate profit/loss.
@@ -182,18 +181,18 @@ class FinancialMetrics:
             filters.append(FinancialRecord.transaction_date <= end_date)
 
         # Total income
-        income_filters = filters + [FinancialRecord.transaction_type == 'income']
+        income_filters = filters + [FinancialRecord.transaction_type == "income"]
         income_query = select(
-            func.sum(FinancialRecord.amount).label('total_income')
+            func.sum(FinancialRecord.amount).label("total_income")
         ).where(and_(*income_filters))
 
         result = await db.execute(income_query)
         total_income = result.scalar() or 0
 
         # Total expenses
-        expense_filters = filters + [FinancialRecord.transaction_type == 'expense']
+        expense_filters = filters + [FinancialRecord.transaction_type == "expense"]
         expense_query = select(
-            func.sum(FinancialRecord.amount).label('total_expenses')
+            func.sum(FinancialRecord.amount).label("total_expenses")
         ).where(and_(*expense_filters))
 
         result = await db.execute(expense_query)
@@ -204,18 +203,15 @@ class FinancialMetrics:
         profit_margin = (profit_loss / total_income * 100) if total_income > 0 else 0
 
         return {
-            'total_income': float(total_income),
-            'total_expenses': float(total_expenses),
-            'profit_loss': float(profit_loss),
-            'profit_margin': round(profit_margin, 2),
-            'is_profitable': profit_loss > 0
+            "total_income": float(total_income),
+            "total_expenses": float(total_expenses),
+            "profit_loss": float(profit_loss),
+            "profit_margin": round(profit_margin, 2),
+            "is_profitable": profit_loss > 0,
         }
 
     @staticmethod
-    async def get_cash_flow_trend(
-        db: AsyncSession,
-        months: int = 6
-    ) -> Dict[str, Any]:
+    async def get_cash_flow_trend(db: AsyncSession, months: int = 6) -> Dict[str, Any]:
         """
         Get cash flow trend over time.
 
@@ -230,19 +226,26 @@ class FinancialMetrics:
         start_date = end_date - timedelta(days=months * 30)
 
         # Get monthly cash flow
-        query = select(
-            func.date_trunc('month', FinancialRecord.transaction_date).label('month'),
-            FinancialRecord.transaction_type,
-            func.sum(FinancialRecord.amount).label('amount')
-        ).where(
-            and_(
-                FinancialRecord.transaction_date >= start_date,
-                FinancialRecord.transaction_date <= end_date
+        query = (
+            select(
+                func.date_trunc("month", FinancialRecord.transaction_date).label(
+                    "month"
+                ),
+                FinancialRecord.transaction_type,
+                func.sum(FinancialRecord.amount).label("amount"),
             )
-        ).group_by(
-            func.date_trunc('month', FinancialRecord.transaction_date),
-            FinancialRecord.transaction_type
-        ).order_by(func.date_trunc('month', FinancialRecord.transaction_date))
+            .where(
+                and_(
+                    FinancialRecord.transaction_date >= start_date,
+                    FinancialRecord.transaction_date <= end_date,
+                )
+            )
+            .group_by(
+                func.date_trunc("month", FinancialRecord.transaction_date),
+                FinancialRecord.transaction_type,
+            )
+            .order_by(func.date_trunc("month", FinancialRecord.transaction_date))
+        )
 
         result = await db.execute(query)
         rows = result.all()
@@ -250,38 +253,38 @@ class FinancialMetrics:
         # Organize by month
         monthly_data = {}
         for row in rows:
-            month_key = row.month.strftime('%Y-%m') if row.month else 'unknown'
+            month_key = row.month.strftime("%Y-%m") if row.month else "unknown"
             if month_key not in monthly_data:
-                monthly_data[month_key] = {'income': 0, 'expenses': 0}
+                monthly_data[month_key] = {"income": 0, "expenses": 0}
 
-            if row.transaction_type == 'income':
-                monthly_data[month_key]['income'] = float(row.amount)
-            elif row.transaction_type == 'expense':
-                monthly_data[month_key]['expenses'] = float(row.amount)
+            if row.transaction_type == "income":
+                monthly_data[month_key]["income"] = float(row.amount)
+            elif row.transaction_type == "expense":
+                monthly_data[month_key]["expenses"] = float(row.amount)
 
         # Calculate net cash flow for each month
         trend_data = [
             {
-                'month': month,
-                'income': data['income'],
-                'expenses': data['expenses'],
-                'net_cash_flow': data['income'] - data['expenses']
+                "month": month,
+                "income": data["income"],
+                "expenses": data["expenses"],
+                "net_cash_flow": data["income"] - data["expenses"],
             }
             for month, data in sorted(monthly_data.items())
         ]
 
         return {
-            'period_months': months,
-            'start_date': start_date.isoformat(),
-            'end_date': end_date.isoformat(),
-            'trend': trend_data
+            "period_months": months,
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat(),
+            "trend": trend_data,
         }
 
     @staticmethod
     async def get_budget_vs_actual(
         db: AsyncSession,
         start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None
+        end_date: Optional[datetime] = None,
     ) -> Dict[str, Any]:
         """
         Compare budgeted vs actual expenses.
@@ -294,7 +297,7 @@ class FinancialMetrics:
         Returns:
             Dict with budget vs actual comparison
         """
-        filters = [FinancialRecord.transaction_type == 'expense']
+        filters = [FinancialRecord.transaction_type == "expense"]
 
         if start_date:
             filters.append(FinancialRecord.transaction_date >= start_date)
@@ -302,10 +305,14 @@ class FinancialMetrics:
             filters.append(FinancialRecord.transaction_date <= end_date)
 
         # Actual expenses by category
-        actual_query = select(
-            FinancialRecord.category,
-            func.sum(FinancialRecord.amount).label('actual')
-        ).where(and_(*filters)).group_by(FinancialRecord.category)
+        actual_query = (
+            select(
+                FinancialRecord.category,
+                func.sum(FinancialRecord.amount).label("actual"),
+            )
+            .where(and_(*filters))
+            .group_by(FinancialRecord.category)
+        )
 
         result = await db.execute(actual_query)
         rows = result.all()
@@ -313,12 +320,12 @@ class FinancialMetrics:
         by_category = {}
         for row in rows:
             by_category[row.category] = {
-                'actual': float(row.actual),
-                'budget': 0,  # Would come from budget table in real implementation
-                'variance': 0
+                "actual": float(row.actual),
+                "budget": 0,  # Would come from budget table in real implementation
+                "variance": 0,
             }
 
         return {
-            'by_category': by_category,
-            'total_actual': sum(cat['actual'] for cat in by_category.values())
+            "by_category": by_category,
+            "total_actual": sum(cat["actual"] for cat in by_category.values()),
         }

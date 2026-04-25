@@ -18,7 +18,7 @@ router = APIRouter(prefix="/reports", tags=["reports"])
 async def get_dashboard_overview(
     start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
     end_date: Optional[str] = Query(None, description="End date (ISO format)"),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Get comprehensive dashboard overview with metrics from all domains.
@@ -38,9 +38,7 @@ async def get_dashboard_overview(
 
 
 @router.get("/executive-summary")
-async def get_executive_summary(
-    db: AsyncSession = Depends(get_db)
-):
+async def get_executive_summary(db: AsyncSession = Depends(get_db)):
     """
     Get executive summary with key metrics across all domains.
 
@@ -53,7 +51,7 @@ async def get_executive_summary(
 async def get_detailed_task_report(
     start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
     end_date: Optional[str] = Query(None, description="End date (ISO format)"),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Get detailed task report with comprehensive metrics.
@@ -74,7 +72,7 @@ async def get_detailed_task_report(
 async def get_detailed_asset_report(
     start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
     end_date: Optional[str] = Query(None, description="End date (ISO format)"),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Get detailed asset report with comprehensive metrics.
@@ -94,9 +92,7 @@ async def get_detailed_asset_report(
 
 
 @router.get("/projects/detailed")
-async def get_detailed_project_report(
-    db: AsyncSession = Depends(get_db)
-):
+async def get_detailed_project_report(db: AsyncSession = Depends(get_db)):
     """
     Get detailed project report with comprehensive metrics.
 
@@ -114,7 +110,7 @@ async def get_detailed_project_report(
 async def get_detailed_financial_report(
     start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
     end_date: Optional[str] = Query(None, description="End date (ISO format)"),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Get detailed financial report with comprehensive metrics.
@@ -133,9 +129,7 @@ async def get_detailed_financial_report(
 
 
 @router.get("/documents/detailed")
-async def get_detailed_document_report(
-    db: AsyncSession = Depends(get_db)
-):
+async def get_detailed_document_report(db: AsyncSession = Depends(get_db)):
     """
     Get detailed document report with comprehensive metrics.
 
@@ -151,10 +145,11 @@ async def get_detailed_document_report(
 @router.get("/tasks/completion-trend")
 async def get_task_completion_trend(
     days: int = Query(30, description="Number of days to analyze"),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """Get task completion trend over time."""
     from backend.reports import TaskMetrics
+
     return await TaskMetrics.get_completion_trend(db, days)
 
 
@@ -162,49 +157,52 @@ async def get_task_completion_trend(
 async def get_asset_utilization(
     start_date: Optional[str] = Query(None),
     end_date: Optional[str] = Query(None),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """Get asset utilization rate."""
     from backend.reports import AssetMetrics
+
     start = datetime.fromisoformat(start_date) if start_date else None
     end = datetime.fromisoformat(end_date) if end_date else None
     return await AssetMetrics.get_utilization_rate(db, start, end)
 
 
 @router.get("/projects/health")
-async def get_project_health(
-    db: AsyncSession = Depends(get_db)
-):
+async def get_project_health(db: AsyncSession = Depends(get_db)):
     """Get project health overview."""
     from backend.reports import ProjectMetrics
+
     return await ProjectMetrics.get_health_overview(db)
 
 
 @router.get("/financial/burn-rate")
 async def get_financial_burn_rate(
     days: int = Query(30, description="Number of days to analyze"),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """Get financial burn rate."""
     from backend.reports import FinancialMetrics
+
     return await FinancialMetrics.get_burn_rate(db, days)
 
 
 @router.get("/financial/cash-flow-trend")
 async def get_cash_flow_trend(
     months: int = Query(6, description="Number of months to analyze"),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """Get cash flow trend over time."""
     from backend.reports import FinancialMetrics
+
     return await FinancialMetrics.get_cash_flow_trend(db, months)
 
 
 @router.get("/documents/activity")
 async def get_document_activity(
     days: int = Query(30, description="Number of days to analyze"),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """Get document activity metrics."""
     from backend.reports import DocumentMetrics
+
     return await DocumentMetrics.get_activity_metrics(db, days)

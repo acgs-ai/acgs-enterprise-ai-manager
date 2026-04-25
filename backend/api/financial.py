@@ -19,7 +19,7 @@ from backend.schemas.financial_record import (
     FinancialRecordUpdate,
     FinancialRecordResponse,
     FinancialRecordFilter,
-    PaginatedFinancialRecordResponse
+    PaginatedFinancialRecordResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -27,10 +27,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.post("/", response_model=FinancialRecordResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/", response_model=FinancialRecordResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_financial_record(
-    record_data: FinancialRecordCreate,
-    db: AsyncSession = Depends(get_db)
+    record_data: FinancialRecordCreate, db: AsyncSession = Depends(get_db)
 ):
     """Create a new financial record."""
     try:
@@ -41,21 +42,18 @@ async def create_financial_record(
         logger.error(f"Failed to create financial record: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create financial record"
+            detail="Failed to create financial record",
         )
 
 
 @router.get("/{record_id}", response_model=FinancialRecordResponse)
-async def get_financial_record(
-    record_id: UUID,
-    db: AsyncSession = Depends(get_db)
-):
+async def get_financial_record(record_id: UUID, db: AsyncSession = Depends(get_db)):
     """Get financial record by ID."""
     record = await FinancialService.get_financial_record(db, record_id)
     if not record:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Financial record {record_id} not found"
+            detail=f"Financial record {record_id} not found",
         )
     return record
 
@@ -72,7 +70,7 @@ async def list_financial_records(
     date_to: Optional[date] = Query(None),
     min_amount: Optional[Decimal] = Query(None),
     max_amount: Optional[Decimal] = Query(None),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """List financial records with filtering and pagination."""
     try:
@@ -84,14 +82,11 @@ async def list_financial_records(
             date_from=date_from,
             date_to=date_to,
             min_amount=min_amount,
-            max_amount=max_amount
+            max_amount=max_amount,
         )
 
         items, total = await FinancialService.list_financial_records(
-            db,
-            filters=filters,
-            page=page,
-            page_size=page_size
+            db, filters=filters, page=page, page_size=page_size
         )
 
         total_pages = math.ceil(total / page_size) if total > 0 else 0
@@ -101,13 +96,13 @@ async def list_financial_records(
             total=total,
             page=page,
             page_size=page_size,
-            total_pages=total_pages
+            total_pages=total_pages,
         )
     except Exception as e:
         logger.error(f"Failed to list financial records: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to list financial records"
+            detail="Failed to list financial records",
         )
 
 
@@ -115,30 +110,27 @@ async def list_financial_records(
 async def update_financial_record(
     record_id: UUID,
     record_data: FinancialRecordUpdate,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """Update financial record."""
     record = await FinancialService.update_financial_record(db, record_id, record_data)
     if not record:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Financial record {record_id} not found"
+            detail=f"Financial record {record_id} not found",
         )
     logger.info(f"Updated financial record: {record_id}")
     return record
 
 
 @router.delete("/{record_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_financial_record(
-    record_id: UUID,
-    db: AsyncSession = Depends(get_db)
-):
+async def delete_financial_record(record_id: UUID, db: AsyncSession = Depends(get_db)):
     """Delete financial record."""
     deleted = await FinancialService.delete_financial_record(db, record_id)
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Financial record {record_id} not found"
+            detail=f"Financial record {record_id} not found",
         )
     logger.info(f"Deleted financial record: {record_id}")
 
@@ -147,14 +139,14 @@ async def delete_financial_record(
 async def approve_financial_record(
     record_id: UUID,
     approver_id: UUID = Query(..., description="Approver user ID"),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """Approve a financial record."""
     record = await FinancialService.approve_financial_record(db, record_id, approver_id)
     if not record:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Financial record {record_id} not found"
+            detail=f"Financial record {record_id} not found",
         )
     logger.info(f"Approved financial record: {record_id} by {approver_id}")
     return record
@@ -164,14 +156,14 @@ async def approve_financial_record(
 async def reject_financial_record(
     record_id: UUID,
     approver_id: UUID = Query(..., description="Approver user ID"),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """Reject a financial record."""
     record = await FinancialService.reject_financial_record(db, record_id, approver_id)
     if not record:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Financial record {record_id} not found"
+            detail=f"Financial record {record_id} not found",
         )
     logger.info(f"Rejected financial record: {record_id} by {approver_id}")
     return record

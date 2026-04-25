@@ -19,7 +19,7 @@ from backend.schemas.task import (
     TaskDetailResponse,
     TaskFilter,
     PaginatedTaskResponse,
-    TaskLinkRequest
+    TaskLinkRequest,
 )
 
 logger = logging.getLogger(__name__)
@@ -27,11 +27,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.post("/", response_model=TaskDetailResponse, status_code=status.HTTP_201_CREATED)
-async def create_task(
-    task_data: TaskCreate,
-    db: AsyncSession = Depends(get_db)
-):
+@router.post(
+    "/", response_model=TaskDetailResponse, status_code=status.HTTP_201_CREATED
+)
+async def create_task(task_data: TaskCreate, db: AsyncSession = Depends(get_db)):
     """
     Create a new task.
 
@@ -50,15 +49,12 @@ async def create_task(
         logger.error(f"Failed to create task: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create task"
+            detail="Failed to create task",
         )
 
 
 @router.get("/{task_id}", response_model=TaskDetailResponse)
-async def get_task(
-    task_id: UUID,
-    db: AsyncSession = Depends(get_db)
-):
+async def get_task(task_id: UUID, db: AsyncSession = Depends(get_db)):
     """
     Get a task by ID with all related entities.
 
@@ -72,8 +68,7 @@ async def get_task(
     task = await TaskService.get_task(db, task_id, include_relations=True)
     if not task:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Task {task_id} not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"Task {task_id} not found"
         )
     return task
 
@@ -88,7 +83,7 @@ async def list_tasks(
     project_id: Optional[UUID] = Query(None),
     search: Optional[str] = Query(None, max_length=255),
     include_relations: bool = Query(False, description="Include related entities"),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """
     List tasks with filtering and pagination.
@@ -114,7 +109,7 @@ async def list_tasks(
             priority=priority,
             assignee_id=assignee_id,
             project_id=project_id,
-            search=search
+            search=search,
         )
 
         # Get tasks
@@ -123,7 +118,7 @@ async def list_tasks(
             filters=filters,
             page=page,
             page_size=page_size,
-            include_relations=include_relations
+            include_relations=include_relations,
         )
 
         # Calculate total pages
@@ -134,21 +129,19 @@ async def list_tasks(
             total=total,
             page=page,
             page_size=page_size,
-            total_pages=total_pages
+            total_pages=total_pages,
         )
     except Exception as e:
         logger.error(f"Failed to list tasks: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to list tasks"
+            detail="Failed to list tasks",
         )
 
 
 @router.put("/{task_id}", response_model=TaskDetailResponse)
 async def update_task(
-    task_id: UUID,
-    task_data: TaskUpdate,
-    db: AsyncSession = Depends(get_db)
+    task_id: UUID, task_data: TaskUpdate, db: AsyncSession = Depends(get_db)
 ):
     """
     Update a task.
@@ -164,18 +157,14 @@ async def update_task(
     task = await TaskService.update_task(db, task_id, task_data)
     if not task:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Task {task_id} not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"Task {task_id} not found"
         )
     logger.info(f"Updated task: {task_id}")
     return task
 
 
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_task(
-    task_id: UUID,
-    db: AsyncSession = Depends(get_db)
-):
+async def delete_task(task_id: UUID, db: AsyncSession = Depends(get_db)):
     """
     Delete a task.
 
@@ -189,17 +178,14 @@ async def delete_task(
     deleted = await TaskService.delete_task(db, task_id)
     if not deleted:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Task {task_id} not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"Task {task_id} not found"
         )
     logger.info(f"Deleted task: {task_id}")
 
 
 @router.post("/{task_id}/assets", response_model=TaskDetailResponse)
 async def link_asset_to_task(
-    task_id: UUID,
-    link_data: TaskLinkRequest,
-    db: AsyncSession = Depends(get_db)
+    task_id: UUID, link_data: TaskLinkRequest, db: AsyncSession = Depends(get_db)
 ):
     """
     Link an IT asset to a task.
@@ -217,7 +203,7 @@ async def link_asset_to_task(
         if not task:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Task {task_id} not found"
+                detail=f"Task {task_id} not found",
             )
         logger.info(f"Linked asset {link_data.entity_id} to task {task_id}")
         return task
@@ -225,15 +211,13 @@ async def link_asset_to_task(
         logger.error(f"Failed to link asset to task: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to link asset to task"
+            detail="Failed to link asset to task",
         )
 
 
 @router.post("/{task_id}/infrastructure", response_model=TaskDetailResponse)
 async def link_infrastructure_to_task(
-    task_id: UUID,
-    link_data: TaskLinkRequest,
-    db: AsyncSession = Depends(get_db)
+    task_id: UUID, link_data: TaskLinkRequest, db: AsyncSession = Depends(get_db)
 ):
     """
     Link infrastructure to a task.
@@ -251,7 +235,7 @@ async def link_infrastructure_to_task(
         if not task:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Task {task_id} not found"
+                detail=f"Task {task_id} not found",
             )
         logger.info(f"Linked infrastructure {link_data.entity_id} to task {task_id}")
         return task
@@ -259,7 +243,7 @@ async def link_infrastructure_to_task(
         logger.error(f"Failed to link infrastructure to task: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to link infrastructure to task"
+            detail="Failed to link infrastructure to task",
         )
 
 
@@ -268,7 +252,7 @@ async def get_project_tasks(
     project_id: UUID,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Get all tasks for a specific project.
@@ -284,11 +268,7 @@ async def get_project_tasks(
     """
     filters = TaskFilter(project_id=project_id)
     tasks, total = await TaskService.list_tasks(
-        db,
-        filters=filters,
-        page=page,
-        page_size=page_size,
-        include_relations=True
+        db, filters=filters, page=page, page_size=page_size, include_relations=True
     )
 
     total_pages = math.ceil(total / page_size) if total > 0 else 0
@@ -298,7 +278,7 @@ async def get_project_tasks(
         total=total,
         page=page,
         page_size=page_size,
-        total_pages=total_pages
+        total_pages=total_pages,
     )
 
 
@@ -307,7 +287,7 @@ async def get_user_tasks(
     user_id: UUID,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Get all tasks assigned to a specific user.
@@ -323,11 +303,7 @@ async def get_user_tasks(
     """
     filters = TaskFilter(assignee_id=user_id)
     tasks, total = await TaskService.list_tasks(
-        db,
-        filters=filters,
-        page=page,
-        page_size=page_size,
-        include_relations=True
+        db, filters=filters, page=page, page_size=page_size, include_relations=True
     )
 
     total_pages = math.ceil(total / page_size) if total > 0 else 0
@@ -337,5 +313,5 @@ async def get_user_tasks(
         total=total,
         page=page,
         page_size=page_size,
-        total_pages=total_pages
+        total_pages=total_pages,
     )

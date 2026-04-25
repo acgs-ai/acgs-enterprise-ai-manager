@@ -26,9 +26,9 @@ async def generate_initial_tasks(context: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Dict with created task IDs
     """
-    trigger_data = context.get('trigger_event', {})
-    project_id = trigger_data.get('id')
-    project_name = trigger_data.get('name', 'New Project')
+    trigger_data = context.get("trigger_event", {})
+    project_id = trigger_data.get("id")
+    project_name = trigger_data.get("name", "New Project")
 
     if not project_id:
         raise ValueError("Project ID not found in trigger event")
@@ -41,26 +41,26 @@ async def generate_initial_tasks(context: Dict[str, Any]) -> Dict[str, Any]:
             "title": f"{project_name} - Planning Phase",
             "description": "Define project scope, requirements, and deliverables",
             "priority": "high",
-            "status": "todo"
+            "status": "todo",
         },
         {
             "title": f"{project_name} - Resource Allocation",
             "description": "Identify and allocate required resources and team members",
             "priority": "high",
-            "status": "todo"
+            "status": "todo",
         },
         {
             "title": f"{project_name} - Setup Development Environment",
             "description": "Configure development tools, repositories, and infrastructure",
             "priority": "medium",
-            "status": "todo"
+            "status": "todo",
         },
         {
             "title": f"{project_name} - Initial Implementation",
             "description": "Begin core feature development",
             "priority": "medium",
-            "status": "todo"
-        }
+            "status": "todo",
+        },
     ]
 
     created_task_ids = []
@@ -73,7 +73,7 @@ async def generate_initial_tasks(context: Dict[str, Any]) -> Dict[str, Any]:
                     title=template["title"],
                     description=template["description"],
                     priority=template["priority"],
-                    status=template["status"]
+                    status=template["status"],
                 )
                 db.add(task)
                 await db.flush()
@@ -81,7 +81,9 @@ async def generate_initial_tasks(context: Dict[str, Any]) -> Dict[str, Any]:
                 logger.info(f"Created task: {task.title}")
 
             await db.commit()
-            logger.info(f"Generated {len(created_task_ids)} tasks for project {project_id}")
+            logger.info(
+                f"Generated {len(created_task_ids)} tasks for project {project_id}"
+            )
 
         except Exception as e:
             await db.rollback()
@@ -103,8 +105,8 @@ async def allocate_assets(context: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Dict with allocated asset IDs
     """
-    trigger_data = context.get('trigger_event', {})
-    project_id = trigger_data.get('id')
+    trigger_data = context.get("trigger_event", {})
+    project_id = trigger_data.get("id")
 
     if not project_id:
         raise ValueError("Project ID not found in context")
@@ -117,8 +119,9 @@ async def allocate_assets(context: Dict[str, Any]) -> Dict[str, Any]:
         try:
             # Find available assets (status = 'available')
             from sqlalchemy import select
+
             result = await db.execute(
-                select(ITAsset).where(ITAsset.status == 'available').limit(3)
+                select(ITAsset).where(ITAsset.status == "available").limit(3)
             )
             available_assets = result.scalars().all()
 
@@ -128,13 +131,17 @@ async def allocate_assets(context: Dict[str, Any]) -> Dict[str, Any]:
 
             # Allocate assets to project
             for asset in available_assets:
-                asset.status = 'in_use'
-                asset.assigned_to = UUID(project_id)  # Assuming assigned_to can be project_id
+                asset.status = "in_use"
+                asset.assigned_to = UUID(
+                    project_id
+                )  # Assuming assigned_to can be project_id
                 allocated_asset_ids.append(str(asset.id))
                 logger.info(f"Allocated asset {asset.name} to project {project_id}")
 
             await db.commit()
-            logger.info(f"Allocated {len(allocated_asset_ids)} assets to project {project_id}")
+            logger.info(
+                f"Allocated {len(allocated_asset_ids)} assets to project {project_id}"
+            )
 
         except Exception as e:
             await db.rollback()
@@ -156,21 +163,21 @@ def create_project_initiation_workflow() -> Workflow:
     workflow = Workflow(
         workflow_id="project_initiation",
         name="Project Initiation Workflow",
-        description="Automatically generate tasks and allocate assets when a project is created"
+        description="Automatically generate tasks and allocate assets when a project is created",
     )
 
     workflow.add_step(
         name="generate_tasks",
         handler=generate_initial_tasks,
         description="Generate initial project tasks",
-        max_retries=2
+        max_retries=2,
     )
 
     workflow.add_step(
         name="allocate_assets",
         handler=allocate_assets,
         description="Allocate available assets to the project",
-        max_retries=2
+        max_retries=2,
     )
 
     workflow.triggered_by(EventType.PROJECT_CREATED)

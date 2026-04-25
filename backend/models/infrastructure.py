@@ -15,24 +15,25 @@ from backend.models.task import task_infrastructure
 
 class Infrastructure(Base):
     """Infrastructure model."""
+
     __tablename__ = "infrastructure"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String(255), nullable=False)
     type = Column(String(50), nullable=False)
-    status = Column(String(50), nullable=False, default='operational')
+    status = Column(String(50), nullable=False, default="operational")
     capacity = Column(JSONB)
     location = Column(String(255))
     dependencies = Column(JSONB, default=[])
     configuration = Column(JSONB)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
-    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(
+        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
     # Relationships
     tasks = relationship(
-        "Task",
-        secondary=task_infrastructure,
-        back_populates="infrastructure"
+        "Task", secondary=task_infrastructure, back_populates="infrastructure"
     )
 
     def __repr__(self):

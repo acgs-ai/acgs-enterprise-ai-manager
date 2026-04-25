@@ -37,9 +37,7 @@ class ITAssetService:
 
     @staticmethod
     async def get_asset(
-        db: AsyncSession,
-        asset_id: UUID,
-        include_relations: bool = False
+        db: AsyncSession, asset_id: UUID, include_relations: bool = False
     ) -> Optional[ITAsset]:
         """
         Get an IT asset by ID.
@@ -58,7 +56,7 @@ class ITAssetService:
             query = query.options(
                 selectinload(ITAsset.owner),
                 selectinload(ITAsset.project),
-                selectinload(ITAsset.tasks)
+                selectinload(ITAsset.tasks),
             )
 
         result = await db.execute(query)
@@ -70,7 +68,7 @@ class ITAssetService:
         filters: Optional[ITAssetFilter] = None,
         page: int = 1,
         page_size: int = 50,
-        include_relations: bool = False
+        include_relations: bool = False,
     ) -> tuple[List[ITAsset], int]:
         """
         List IT assets with filtering and pagination.
@@ -115,7 +113,7 @@ class ITAssetService:
                 conditions.append(
                     or_(
                         ITAsset.name.ilike(search_term),
-                        ITAsset.location.ilike(search_term)
+                        ITAsset.location.ilike(search_term),
                     )
                 )
 
@@ -138,7 +136,7 @@ class ITAssetService:
             query = query.options(
                 selectinload(ITAsset.owner),
                 selectinload(ITAsset.project),
-                selectinload(ITAsset.tasks)
+                selectinload(ITAsset.tasks),
             )
 
         # Execute query
@@ -149,9 +147,7 @@ class ITAssetService:
 
     @staticmethod
     async def update_asset(
-        db: AsyncSession,
-        asset_id: UUID,
-        asset_data: ITAssetUpdate
+        db: AsyncSession, asset_id: UUID, asset_data: ITAssetUpdate
     ) -> Optional[ITAsset]:
         """
         Update an IT asset.

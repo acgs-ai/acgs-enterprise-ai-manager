@@ -26,11 +26,13 @@ async def update_project_status(context: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Dict with updated project info
     """
-    trigger_data = context.get('trigger_event', )
-    financial_id = trigger_data.get('id')
-    project_id = trigger_data.get('project_id')
-    amount = trigger_data.get('amount')
-    record_type = trigger_data.get('type')
+    trigger_data = context.get(
+        "trigger_event",
+    )
+    financial_id = trigger_data.get("id")
+    project_id = trigger_data.get("project_id")
+    amount = trigger_data.get("amount")
+    record_type = trigger_data.get("type")
 
     if not financial_id:
         raise ValueError("Financial record ID not found in trigger event")
@@ -45,6 +47,7 @@ async def update_project_status(context: Dict[str, Any]) -> Dict[str, Any]:
             try:
                 # Get the project
                 from sqlalchemy import select
+
                 result = await db.execute(
                     select(Project).where(Project.id == UUID(project_id))
                 )
@@ -52,23 +55,27 @@ async def update_project_status(context: Dict[str, Any]) -> Dict[str, Any]:
 
                 if project:
                     # Update project based on financial record type
-                    if record_type == 'budget_allocation':
+                    if record_type == "budget_allocation":
                         # Budget approved - move project to active if it was planning
-                        if project.status == 'planning':
-                            project.status = 'active'
+                        if project.status == "planning":
+                            project.status = "active"
                             logger.info(f"Project {project_id} moved to active status")
 
-                    elif record_type == 'expense':
+                    elif record_type == "expense":
                         # Track expenses against budget
                         if project.actual_cost and project.budget:
                             if project.actual_cost >= project.budget * 0.9:
-                                logger.warning(f"Project {project_id} approaching budget limit")
+                                logger.warning(
+                                    f"Project {project_id} approaching budget limit"
+                                )
 
                     updated_project_id = str(project.id)
                     project_status = project.status
 
                     await db.commit()
-                    logger.info(f"Updated project {project_id} status to {project_status}")
+                    logger.info(
+                        f"Updated project {project_id} status to {project_status}"
+                    )
 
             except Exception as e:
                 await db.rollback()
@@ -80,7 +87,7 @@ async def update_project_status(context: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "project_id": updated_project_id,
         "project_status": project_status,
-        "financial_id": financial_id
+        "financial_id": financial_id,
     }
 
 
@@ -94,13 +101,13 @@ async def notify_team(context: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Dict with notification info
     """
-    trigger_data = context.get('trigger_event', {})
-    project_id = trigger_data.get('project_id')
-    amount = trigger_data.get('amount')
-    record_type = trigger_data.get('type')
+    trigger_data = context.get("trigger_event", {})
+    project_id = trigger_data.get("project_id")
+    amount = trigger_data.get("amount")
+    record_type = trigger_data.get("type")
 
-    update_result = context.get('update_project_status', {})
-    project_status = update_result.get('project_status')
+    update_result = context.get("update_project_status", {})
+    project_status = update_result.get("project_status")
 
     logger.info(f"Sending notifications for financial approval")
 
@@ -111,6 +118,7 @@ async def notify_team(context: Dict[str, Any]) -> Dict[str, Any]:
             if project_id:
                 # Get project details
                 from sqlalchemy import select
+
                 result = await db.execute(
                     select(Project).where(Project.id == UUID(project_id))
                 )
@@ -129,21 +137,25 @@ async def notify_team(context: Dict[str, Any]) -> Dict[str, Any]:
 
                     # Simulate notification to project owner
                     if project.owner_id:
-                        notifications_sent.append({
-                            "recipient_id": str(project.owner_id),
-                            "message": notification_message,
-                            "type": "financial_approval"
-                        })
+                        notifications_sent.append(
+                            {
+                                "recipient_id": str(project.owner_id),
+                                "message": notification_message,
+                                "type": "financial_approval",
+                            }
+                        )
 
                     # Simulate notification to team members
                     if project.team:
                         for member in project.team:
-                            if isinstance(member, dict) and 'user_id' in member:
-                                notifications_sent.append({
-                                    "recipient_id": member['user_id'],
-                                    "message": notification_message,
-                                    "type": "financial_approval"
-                                })
+                            if isinstance(member, dict) and "user_id" in member:
+                                notifications_sent.append(
+                                    {
+                                        "recipient_id": member["user_id"],
+                                        "message": notification_message,
+                                        "type": "financial_approval",
+                                    }
+                                )
 
             logger.info(f"Sent {len(notifications_sent)} notifications")
 
@@ -155,7 +167,7 @@ async def notify_team(context: Dict[str, Any]) -> Dict[str, Any]:
 
     return {
         "notifications_sent": len(notifications_sent),
-        "recipients": [n["recipient_id"] for n in notifications_sent]
+        "recipients": [n["recipient_id"] for n in notifications_sent],
     }
 
 
@@ -169,21 +181,21 @@ def create_financial_approval_workflow() -> Workflow:
     workflow = Workflow(
         workflow_id="financial_approval",
         name="Financial Approval Workflow",
-        description="Update project status and notify team when financial records are approved"
+        description="Update project status and notify team when financial records are approved",
     )
 
     workflow.add_step(
         name="update_project_status",
         handler=update_project_status,
         description="Update project status based on financial approval",
-        max_retries=2
+        max_retries=2,
     )
 
     workflow.add_step(
         name="notify_team",
         handler=notify_team,
         description="Send notifications to project team members",
-        max_retries=1
+        max_retries=1,
     )
 
     workflow.triggered_by(EventType.FINANCIAL_APPROVED)

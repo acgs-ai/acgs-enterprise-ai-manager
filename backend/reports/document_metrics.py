@@ -18,10 +18,7 @@ class DocumentMetrics:
     """Calculate document-related metrics for reporting."""
 
     @staticmethod
-    async def get_activity_metrics(
-        db: AsyncSession,
-        days: int = 30
-    ) -> Dict[str, Any]:
+    async def get_activity_metrics(db: AsyncSession, days: int = 30) -> Dict[str, Any]:
         """
         Get document activity metrics.
 
@@ -37,10 +34,7 @@ class DocumentMetrics:
 
         # Documents created in period
         created_query = select(func.count(Document.id)).where(
-            and_(
-                Document.created_at >= start_date,
-                Document.created_at <= end_date
-            )
+            and_(Document.created_at >= start_date, Document.created_at <= end_date)
         )
 
         result = await db.execute(created_query)
@@ -51,7 +45,7 @@ class DocumentMetrics:
             and_(
                 Document.updated_at >= start_date,
                 Document.updated_at <= end_date,
-                Document.updated_at != Document.created_at
+                Document.updated_at != Document.created_at,
             )
         )
 
@@ -64,17 +58,17 @@ class DocumentMetrics:
         total_documents = result.scalar() or 0
 
         return {
-            'period_days': days,
-            'created': created_count,
-            'updated': updated_count,
-            'total_documents': total_documents,
-            'activity_rate': round((created_count + updated_count) / days, 2) if days > 0 else 0
+            "period_days": days,
+            "created": created_count,
+            "updated": updated_count,
+            "total_documents": total_documents,
+            "activity_rate": (
+                round((created_count + updated_count) / days, 2) if days > 0 else 0
+            ),
         }
 
     @staticmethod
-    async def get_type_distribution(
-        db: AsyncSession
-    ) -> Dict[str, Any]:
+    async def get_type_distribution(db: AsyncSession) -> Dict[str, Any]:
         """
         Get distribution of documents by type.
 
@@ -85,8 +79,7 @@ class DocumentMetrics:
             Dict with type distribution
         """
         query = select(
-            Document.document_type,
-            func.count(Document.id).label('count')
+            Document.document_type, func.count(Document.id).label("count")
         ).group_by(Document.document_type)
 
         result = await db.execute(query)
@@ -94,15 +87,10 @@ class DocumentMetrics:
 
         distribution = {row.document_type: row.count for row in rows}
 
-        return {
-            'distribution': distribution,
-            'total': sum(distribution.values())
-        }
+        return {"distribution": distribution, "total": sum(distribution.values())}
 
     @staticmethod
-    async def get_storage_metrics(
-        db: AsyncSession
-    ) -> Dict[str, Any]:
+    async def get_storage_metrics(db: AsyncSession) -> Dict[str, Any]:
         """
         Get document storage metrics.
 
@@ -113,17 +101,14 @@ class DocumentMetrics:
             Dict with storage metrics
         """
         # Total storage used
-        storage_query = select(
-            func.sum(Document.file_size).label('total_size')
-        )
+        storage_query = select(func.sum(Document.file_size).label("total_size"))
 
         result = await db.execute(storage_query)
         total_size = result.scalar() or 0
 
         # Storage by type
         type_storage_query = select(
-            Document.document_type,
-            func.sum(Document.file_size).label('size')
+            Document.document_type, func.sum(Document.file_size).label("size")
         ).group_by(Document.document_type)
 
         result = await db.execute(type_storage_query)
@@ -135,16 +120,13 @@ class DocumentMetrics:
         total_size_mb = total_size / (1024 * 1024) if total_size else 0
 
         return {
-            'total_size_bytes': int(total_size),
-            'total_size_mb': round(total_size_mb, 2),
-            'by_type_bytes': by_type
+            "total_size_bytes": int(total_size),
+            "total_size_mb": round(total_size_mb, 2),
+            "by_type_bytes": by_type,
         }
 
     @staticmethod
-    async def get_access_metrics(
-        db: AsyncSession,
-        days: int = 30
-    ) -> Dict[str, Any]:
+    async def get_access_metrics(db: AsyncSession, days: int = 30) -> Dict[str, Any]:
         """
         Get document access metrics.
 
@@ -160,17 +142,14 @@ class DocumentMetrics:
 
         # Documents accessed in period (based on updated_at as proxy)
         accessed_query = select(func.count(Document.id)).where(
-            and_(
-                Document.updated_at >= start_date,
-                Document.updated_at <= end_date
-            )
+            and_(Document.updated_at >= start_date, Document.updated_at <= end_date)
         )
 
         result = await db.execute(accessed_query)
         accessed_count = result.scalar() or 0
 
         return {
-            'period_days': days,
-            'accessed_documents': accessed_count,
-            'average_daily_access': round(accessed_count / days, 2) if days > 0 else 0
+            "period_days": days,
+            "accessed_documents": accessed_count,
+            "average_daily_access": round(accessed_count / days, 2) if days > 0 else 0,
         }

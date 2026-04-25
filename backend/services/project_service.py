@@ -35,7 +35,7 @@ class ProjectService:
         db: AsyncSession,
         filters: Optional[ProjectFilter] = None,
         page: int = 1,
-        page_size: int = 50
+        page_size: int = 50,
     ) -> tuple[List[Project], int]:
         """List projects with filtering and pagination."""
         query = select(Project)
@@ -51,7 +51,7 @@ class ProjectService:
                 conditions.append(
                     or_(
                         Project.name.ilike(search_term),
-                        Project.description.ilike(search_term)
+                        Project.description.ilike(search_term),
                     )
                 )
             if filters.start_after:
@@ -74,9 +74,7 @@ class ProjectService:
 
     @staticmethod
     async def update_project(
-        db: AsyncSession,
-        project_id: UUID,
-        project_data: ProjectUpdate
+        db: AsyncSession, project_id: UUID, project_data: ProjectUpdate
     ) -> Optional[Project]:
         """Update project."""
         project = await ProjectService.get_project(db, project_id)

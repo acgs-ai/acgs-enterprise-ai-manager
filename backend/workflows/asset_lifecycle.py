@@ -28,10 +28,10 @@ async def create_maintenance_task(context: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Dict with created task ID
     """
-    trigger_data = context.get('trigger_event', {})
-    asset_id = trigger_data.get('id')
-    asset_name = trigger_data.get('name', 'Asset')
-    asset_type = trigger_data.get('type', 'unknown')
+    trigger_data = context.get("trigger_event", {})
+    asset_id = trigger_data.get("id")
+    asset_name = trigger_data.get("name", "Asset")
+    asset_type = trigger_data.get("type", "unknown")
 
     if not asset_id:
         raise ValueError("Asset ID not found in trigger event")
@@ -48,7 +48,7 @@ async def create_maintenance_task(context: Dict[str, Any]) -> Dict[str, Any]:
                 description=f"Perform scheduled maintenance on {asset_type} asset: {asset_name}",
                 priority="high",
                 status="todo",
-                tags=["maintenance", "asset", asset_type]
+                tags=["maintenance", "asset", asset_type],
             )
             db.add(task)
             await db.flush()
@@ -77,14 +77,14 @@ async def update_project_budget(context: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Dict with updated budget info
     """
-    trigger_data = context.get('trigger_event', {})
-    asset_id = trigger_data.get('id')
-    asset_name = trigger_data.get('name', 'Asset')
+    trigger_data = context.get("trigger_event", {})
+    asset_id = trigger_data.get("id")
+    asset_name = trigger_data.get("name", "Asset")
 
     logger.info(f"Updating project budget for asset maintenance: {asset_name}")
 
     # Estimate maintenance cost based on asset type
-    maintenance_cost = Decimal('500.00')  # Default maintenance cost
+    maintenance_cost = Decimal("500.00")  # Default maintenance cost
 
     updated_projects = []
 
@@ -101,7 +101,10 @@ async def update_project_budget(context: Dict[str, Any]) -> Dict[str, Any]:
 
             if not asset or not asset.assigned_to:
                 logger.warning(f"Asset {asset_id} not assigned to any project")
-                return {"updated_projects": [], "maintenance_cost": float(maintenance_cost)}
+                return {
+                    "updated_projects": [],
+                    "maintenance_cost": float(maintenance_cost),
+                }
 
             # Get the project
             project_result = await db.execute(
@@ -112,25 +115,27 @@ async def update_project_budget(context: Dict[str, Any]) -> Dict[str, Any]:
             if project:
                 # Update project actual cost
                 if project.actual_cost is None:
-                    project.actual_cost = Decimal('0.00')
+                    project.actual_cost = Decimal("0.00")
                 project.actual_cost += maintenance_cost
                 updated_projects.append(str(project.id))
 
                 # Create financial record
                 financial_record = FinancialRecord(
-                    type='expense',
+                    type="expense",
                     amount=maintenance_cost,
-                    currency='USD',
+                    currency="USD",
                     date=db.execute(select(db.func.current_date())).scalar(),
-                    category='maintenance',
+                    category="maintenance",
                     project_id=project.id,
                     description=f"Maintenance cost for asset: {asset_name}",
-                    approval_status='pending'
+                    approval_status="pending",
                 )
                 db.add(financial_record)
 
                 await db.commit()
-                logger.info(f"Updated project {project.id} budget with maintenance cost: ${maintenance_cost}")
+                logger.info(
+                    f"Updated project {project.id} budget with maintenance cost: ${maintenance_cost}"
+                )
 
         except Exception as e:
             await db.rollback()
@@ -141,7 +146,7 @@ async def update_project_budget(context: Dict[str, Any]) -> Dict[str, Any]:
 
     return {
         "updated_projects": updated_projects,
-        "maintenance_cost": float(maintenance_cost)
+        "maintenance_cost": float(maintenance_cost),
     }
 
 
@@ -155,21 +160,21 @@ def create_asset_lifecycle_workflow() -> Workflow:
     workflow = Workflow(
         workflow_id="asset_lifecycle",
         name="Asset Lifecycle Workflow",
-        description="Trigger maintenance tasks and update project budgets when assets require maintenance"
+        description="Trigger maintenance tasks and update project budgets when assets require maintenance",
     )
 
     workflow.add_step(
         name="create_maintenance_task",
         handler=create_maintenance_task,
         description="Create maintenance task for the asset",
-        max_retries=2
+        max_retries=2,
     )
 
     workflow.add_step(
         name="update_project_budget",
         handler=update_project_budget,
         description="Update project budget with maintenance cost",
-        max_retries=2
+        max_retries=2,
     )
 
     workflow.triggered_by(EventType.ASSET_MAINTENANCE_DUE)

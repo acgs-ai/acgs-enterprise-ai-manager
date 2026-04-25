@@ -53,7 +53,9 @@ class GovernanceMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         # Check if this is an AI operation that needs governance validation
-        is_ai_operation = any(path.startswith(ai_path) for ai_path in self.AI_OPERATION_PATHS)
+        is_ai_operation = any(
+            path.startswith(ai_path) for ai_path in self.AI_OPERATION_PATHS
+        )
 
         if is_ai_operation:
             # Extract operation details from request
@@ -64,7 +66,7 @@ class GovernanceMiddleware(BaseHTTPMiddleware):
             validation_result = governance.validate_operation(
                 operation=operation_context.get("operation", "unknown"),
                 context=operation_context,
-                agent_id=operation_context.get("agent_id", "default")
+                agent_id=operation_context.get("agent_id", "default"),
             )
 
             # Enforce governance decision
@@ -77,8 +79,8 @@ class GovernanceMiddleware(BaseHTTPMiddleware):
                     content={
                         "detail": "Operation blocked by governance rules",
                         "violations": validation_result.get("violations", []),
-                        "decision_id": validation_result.get("decision_id")
-                    }
+                        "decision_id": validation_result.get("decision_id"),
+                    },
                 )
 
             elif action == "REQUIRE_APPROVAL":
@@ -88,7 +90,7 @@ class GovernanceMiddleware(BaseHTTPMiddleware):
                 approval_request = governance.request_approval(
                     operation=operation_context.get("operation", "unknown"),
                     context=operation_context,
-                    agent_id=operation_context.get("agent_id", "default")
+                    agent_id=operation_context.get("agent_id", "default"),
                 )
 
                 return JSONResponse(
@@ -96,8 +98,8 @@ class GovernanceMiddleware(BaseHTTPMiddleware):
                     content={
                         "detail": "Operation requires human approval",
                         "approval_request": approval_request,
-                        "decision_id": validation_result.get("decision_id")
-                    }
+                        "decision_id": validation_result.get("decision_id"),
+                    },
                 )
 
             # Action is ALLOW - proceed with request
@@ -112,7 +114,9 @@ class GovernanceMiddleware(BaseHTTPMiddleware):
         # Add governance headers to response
         if is_ai_operation and hasattr(request.state, "governance_decision"):
             decision = request.state.governance_decision
-            response.headers["X-Governance-Decision"] = decision.get("action", "UNKNOWN")
+            response.headers["X-Governance-Decision"] = decision.get(
+                "action", "UNKNOWN"
+            )
             if "decision_id" in decision:
                 response.headers["X-Governance-Decision-ID"] = decision["decision_id"]
 

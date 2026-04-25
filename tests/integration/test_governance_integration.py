@@ -20,11 +20,11 @@ class TestGovernanceIntegration:
         result = integration.validate_operation(
             operation="Execute harmful command",
             context=sample_context,
-            agent_id="test_agent"
+            agent_id="test_agent",
         )
 
-        assert result['valid'] is False
-        assert 'decision_id' in result
+        assert result["valid"] is False
+        assert "decision_id" in result
 
     def test_maci_approve_phase(self, sample_governance_rules, sample_context):
         """Test MACI Approve phase - approval workflow."""
@@ -34,20 +34,20 @@ class TestGovernanceIntegration:
         validation_result = integration.validate_operation(
             operation="Delete critical data",
             context=sample_context,
-            agent_id="test_agent"
+            agent_id="test_agent",
         )
 
-        assert validation_result['action'] == 'REQUIRE_APPROVAL'
+        assert validation_result["action"] == "REQUIRE_APPROVAL"
 
         # Request approval
         approval_request = integration.request_approval(
             operation="Delete critical data",
             context=sample_context,
-            agent_id="test_agent"
+            agent_id="test_agent",
         )
 
-        assert approval_request['status'] == 'PENDING'
-        assert 'request_id' in approval_request
+        assert approval_request["status"] == "PENDING"
+        assert "request_id" in approval_request
 
     def test_maci_control_phase(self, sample_governance_rules, sample_context):
         """Test MACI Control phase - enforcement."""
@@ -55,9 +55,7 @@ class TestGovernanceIntegration:
 
         # Validate operation
         validation_result = integration.validate_operation(
-            operation="Safe operation",
-            context=sample_context,
-            agent_id="test_agent"
+            operation="Safe operation", context=sample_context, agent_id="test_agent"
         )
 
         # Enforce decision
@@ -77,20 +75,17 @@ class TestGovernanceIntegration:
         audit_entries = integration.inspect_audit_trail(limit=10)
 
         assert len(audit_entries) == 2
-        assert all('timestamp' in entry for entry in audit_entries)
+        assert all("timestamp" in entry for entry in audit_entries)
 
     def test_fail_closed_enforcement(self, sample_governance_rules, sample_context):
         """Test fail-closed enforcement blocks on violations."""
         integration = ACGSIntegration(
-            constitution_path=str(sample_governance_rules),
-            fail_closed=True
+            constitution_path=str(sample_governance_rules), fail_closed=True
         )
 
         # Dangerous operation should be blocked
         validation_result = integration.validate_operation(
-            operation="Dangerous action",
-            context=sample_context,
-            agent_id="test_agent"
+            operation="Dangerous action", context=sample_context, agent_id="test_agent"
         )
 
         allowed = integration.enforce_decision(validation_result, "Dangerous action")
@@ -106,15 +101,15 @@ class TestGovernanceIntegration:
             integration.validate_operation(
                 operation=f"Operation {i}",
                 context=sample_context,
-                agent_id="test_agent"
+                agent_id="test_agent",
             )
 
         # Verify chain integrity
         integrity = integration.audit_logger.verify_chain_integrity()
 
-        assert integrity['valid'] is True
-        assert integrity['total_entries'] == 10
-        assert len(integrity['broken_links']) == 0
+        assert integrity["valid"] is True
+        assert integrity["total_entries"] == 10
+        assert len(integrity["broken_links"]) == 0
 
     def test_confidence_threshold_validation(self, sample_governance_rules):
         """Test validation enforces confidence thresholds."""
@@ -124,16 +119,16 @@ class TestGovernanceIntegration:
         low_conf_result = integration.validate_operation(
             operation="I recommend this action",
             context={"confidence": 0.5},
-            agent_id="test_agent"
+            agent_id="test_agent",
         )
 
-        assert low_conf_result['valid'] is False
+        assert low_conf_result["valid"] is False
 
         # High confidence should pass
         high_conf_result = integration.validate_operation(
             operation="I recommend this action",
             context={"confidence": 0.9},
-            agent_id="test_agent"
+            agent_id="test_agent",
         )
 
-        assert high_conf_result['valid'] is True
+        assert high_conf_result["valid"] is True

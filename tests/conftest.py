@@ -77,7 +77,7 @@ def sample_context() -> Dict[str, Any]:
         "timestamp": datetime.utcnow().isoformat(),
         "confidence": 0.85,
         "amount": 1000,
-        "batch_size": 50
+        "batch_size": 50,
     }
 
 

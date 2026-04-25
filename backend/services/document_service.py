@@ -35,7 +35,7 @@ class DocumentService:
         db: AsyncSession,
         filters: Optional[DocumentFilter] = None,
         page: int = 1,
-        page_size: int = 50
+        page_size: int = 50,
     ) -> tuple[List[Document], int]:
         """List documents with filtering and pagination."""
         query = select(Document)
@@ -54,7 +54,7 @@ class DocumentService:
                 conditions.append(
                     or_(
                         Document.title.ilike(search_term),
-                        Document.content.ilike(search_term)
+                        Document.content.ilike(search_term),
                     )
                 )
             if conditions:
@@ -73,9 +73,7 @@ class DocumentService:
 
     @staticmethod
     async def update_document(
-        db: AsyncSession,
-        doc_id: UUID,
-        doc_data: DocumentUpdate
+        db: AsyncSession, doc_id: UUID, doc_data: DocumentUpdate
     ) -> Optional[Document]:
         """Update document."""
         doc = await DocumentService.get_document(db, doc_id)

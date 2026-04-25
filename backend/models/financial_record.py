@@ -14,6 +14,7 @@ from backend.database import Base
 
 class FinancialRecord(Base):
     """Financial Record model with approval workflow."""
+
     __tablename__ = "financial_records"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -23,20 +24,22 @@ class FinancialRecord(Base):
         # CHECK constraint: ('expense', 'revenue', 'budget_allocation', 'invoice', 'payment')
     )
     amount = Column(Numeric(15, 2), nullable=False)
-    currency = Column(String(3), default='USD')
+    currency = Column(String(3), default="USD")
     date = Column(Date, nullable=False)
     category = Column(String(100), nullable=False)
-    project_id = Column(UUID(as_uuid=True), ForeignKey('projects.id'), nullable=True)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id"), nullable=True)
     approval_status = Column(
         String(20),
-        default='pending',
+        default="pending",
         # CHECK constraint: ('pending', 'approved', 'rejected')
     )
-    approved_by = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=True)
+    approved_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     description = Column(Text, nullable=True)
     additional_data = Column(JSONB, nullable=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
-    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(
+        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
     # Relationships
     project = relationship("Project", foreign_keys=[project_id])

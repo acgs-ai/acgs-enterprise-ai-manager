@@ -9,14 +9,20 @@ from typing import Optional, List
 from uuid import UUID
 
 from backend.models.financial_record import FinancialRecord
-from backend.schemas.financial_record import FinancialRecordCreate, FinancialRecordUpdate, FinancialRecordFilter
+from backend.schemas.financial_record import (
+    FinancialRecordCreate,
+    FinancialRecordUpdate,
+    FinancialRecordFilter,
+)
 
 
 class FinancialService:
     """Service class for Financial Record business logic."""
 
     @staticmethod
-    async def create_financial_record(db: AsyncSession, record_data: FinancialRecordCreate) -> FinancialRecord:
+    async def create_financial_record(
+        db: AsyncSession, record_data: FinancialRecordCreate
+    ) -> FinancialRecord:
         """Create a new financial record."""
         record = FinancialRecord(**record_data.model_dump())
         db.add(record)
@@ -25,9 +31,13 @@ class FinancialService:
         return record
 
     @staticmethod
-    async def get_financial_record(db: AsyncSession, record_id: UUID) -> Optional[FinancialRecord]:
+    async def get_financial_record(
+        db: AsyncSession, record_id: UUID
+    ) -> Optional[FinancialRecord]:
         """Get financial record by ID."""
-        result = await db.execute(select(FinancialRecord).where(FinancialRecord.id == record_id))
+        result = await db.execute(
+            select(FinancialRecord).where(FinancialRecord.id == record_id)
+        )
         return result.scalar_one_or_none()
 
     @staticmethod
@@ -35,7 +45,7 @@ class FinancialService:
         db: AsyncSession,
         filters: Optional[FinancialRecordFilter] = None,
         page: int = 1,
-        page_size: int = 50
+        page_size: int = 50,
     ) -> tuple[List[FinancialRecord], int]:
         """List financial records with filtering and pagination."""
         query = select(FinancialRecord)
@@ -45,11 +55,15 @@ class FinancialService:
             if filters.type:
                 conditions.append(FinancialRecord.type == filters.type)
             if filters.approval_status:
-                conditions.append(FinancialRecord.approval_status == filters.approval_status)
+                conditions.append(
+                    FinancialRecord.approval_status == filters.approval_status
+                )
             if filters.project_id:
                 conditions.append(FinancialRecord.project_id == filters.project_id)
             if filters.category:
-                conditions.append(FinancialRecord.category.ilike(f"%{filters.category}%"))
+                conditions.append(
+                    FinancialRecord.category.ilike(f"%{filters.category}%")
+                )
             if filters.date_from:
                 conditions.append(FinancialRecord.date >= filters.date_from)
             if filters.date_to:
@@ -74,9 +88,7 @@ class FinancialService:
 
     @staticmethod
     async def update_financial_record(
-        db: AsyncSession,
-        record_id: UUID,
-        record_data: FinancialRecordUpdate
+        db: AsyncSession, record_id: UUID, record_data: FinancialRecordUpdate
     ) -> Optional[FinancialRecord]:
         """Update financial record."""
         record = await FinancialService.get_financial_record(db, record_id)
@@ -103,16 +115,14 @@ class FinancialService:
 
     @staticmethod
     async def approve_financial_record(
-        db: AsyncSession,
-        record_id: UUID,
-        approver_id: UUID
+        db: AsyncSession, record_id: UUID, approver_id: UUID
     ) -> Optional[FinancialRecord]:
         """Approve a financial record."""
         record = await FinancialService.get_financial_record(db, record_id)
         if not record:
             return None
 
-        record.approval_status = 'approved'
+        record.approval_status = "approved"
         record.approved_by = approver_id
         await db.commit()
         await db.refresh(record)
@@ -120,16 +130,14 @@ class FinancialService:
 
     @staticmethod
     async def reject_financial_record(
-        db: AsyncSession,
-        record_id: UUID,
-        approver_id: UUID
+        db: AsyncSession, record_id: UUID, approver_id: UUID
     ) -> Optional[FinancialRecord]:
         """Reject a financial record."""
         record = await FinancialService.get_financial_record(db, record_id)
         if not record:
             return None
 
-        record.approval_status = 'rejected'
+        record.approval_status = "rejected"
         record.approved_by = approver_id
         await db.commit()
         await db.refresh(record)

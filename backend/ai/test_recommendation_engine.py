@@ -26,55 +26,51 @@ async def test_recommendation_engine():
 
     # Test 2: Generate task recommendation
     task_context = {
-        'task_data': {
-            'due_date': '2026-04-26T10:00:00Z',
-            'blocks': ['task-2', 'task-3'],
-            'project_priority': 'high',
-            'assignee_id': 'user-1'
+        "task_data": {
+            "due_date": "2026-04-26T10:00:00Z",
+            "blocks": ["task-2", "task-3"],
+            "project_priority": "high",
+            "assignee_id": "user-1",
         }
     }
     task_rec = await engine.generate_recommendation(
-        domain=RecommendationDomain.TASKS,
-        entity_id='task-1',
-        context=task_context
+        domain=RecommendationDomain.TASKS, entity_id="task-1", context=task_context
     )
     print(f"✓ Task recommendation: {task_rec['suggestion']}")
     print(f"  Confidence: {task_rec['confidence']}")
     print(f"  Rationale: {task_rec['rationale']}")
-    assert task_rec['confidence'] > 0, "Should have confidence score"
-    assert task_rec['status'] == 'approved', "Should be approved without governance"
+    assert task_rec["confidence"] > 0, "Should have confidence score"
+    assert task_rec["status"] == "approved", "Should be approved without governance"
 
     # Test 3: Generate asset recommendation
     asset_context = {
-        'asset_data': {
-            'type': 'server',
-            'lifecycle_stage': 'aging',
-            'purchase_date': '2020-01-01T00:00:00Z',
-            'status': 'active'
+        "asset_data": {
+            "type": "server",
+            "lifecycle_stage": "aging",
+            "purchase_date": "2020-01-01T00:00:00Z",
+            "status": "active",
         }
     }
     asset_rec = await engine.generate_recommendation(
-        domain=RecommendationDomain.ASSETS,
-        entity_id='asset-1',
-        context=asset_context
+        domain=RecommendationDomain.ASSETS, entity_id="asset-1", context=asset_context
     )
     print(f"✓ Asset recommendation: {asset_rec['suggestion']}")
     print(f"  Confidence: {asset_rec['confidence']}")
 
     # Test 4: Generate project risk assessment
     project_context = {
-        'project_data': {
-            'budget': 100000,
-            'actual_cost': 85000,
-            'status': 'active',
-            'end_date': '2026-05-01T00:00:00Z',
-            'team': ['user-1']
+        "project_data": {
+            "budget": 100000,
+            "actual_cost": 85000,
+            "status": "active",
+            "end_date": "2026-05-01T00:00:00Z",
+            "team": ["user-1"],
         }
     }
     project_rec = await engine.generate_recommendation(
         domain=RecommendationDomain.PROJECTS,
-        entity_id='project-1',
-        context=project_context
+        entity_id="project-1",
+        context=project_context,
     )
     print(f"✓ Project recommendation: {project_rec['suggestion']}")
     print(f"  Confidence: {project_rec['confidence']}")

@@ -13,8 +13,7 @@ logger = logging.getLogger(__name__)
 
 # Database URL from environment variable with fallback
 DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql+asyncpg://postgres:postgres@localhost:5432/acgs_manager"
+    "DATABASE_URL", "postgresql+asyncpg://postgres:postgres@localhost:5432/acgs_manager"
 )
 
 # Create async engine with connection pooling

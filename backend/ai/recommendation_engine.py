@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 class RecommendationDomain(str, Enum):
     """Supported recommendation domains"""
+
     TASKS = "tasks"
     ASSETS = "assets"
     INFRASTRUCTURE = "infrastructure"
@@ -54,7 +55,7 @@ class RecommendationEngine:
         domain: RecommendationDomain,
         entity_id: str,
         context: Dict[str, Any],
-        user_id: Optional[str] = None
+        user_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Generate a recommendation for a specific entity.
@@ -77,34 +78,36 @@ class RecommendationEngine:
         recommendation = await recommender.recommend(entity_id, context)
 
         # Add metadata
-        recommendation['domain'] = domain
-        recommendation['entity_id'] = entity_id
-        recommendation['generated_at'] = datetime.utcnow().isoformat()
-        recommendation['user_id'] = user_id
+        recommendation["domain"] = domain
+        recommendation["entity_id"] = entity_id
+        recommendation["generated_at"] = datetime.utcnow().isoformat()
+        recommendation["user_id"] = user_id
 
         # Governance check if available
         if self.governance:
             validation = self.governance.validate_operation(
                 operation=f"generate_recommendation_{domain}",
                 context={
-                    'domain': domain,
-                    'entity_id': entity_id,
-                    'confidence': recommendation.get('confidence', 0)
-                }
+                    "domain": domain,
+                    "entity_id": entity_id,
+                    "confidence": recommendation.get("confidence", 0),
+                },
             )
-            recommendation['governance_check'] = validation
+            recommendation["governance_check"] = validation
 
-            if validation['action'] == 'BLOCK':
-                recommendation['status'] = 'blocked'
-                recommendation['blocked_reason'] = validation.get('violations', [])
-            elif validation['action'] == 'REQUIRE_APPROVAL':
-                recommendation['status'] = 'pending_approval'
+            if validation["action"] == "BLOCK":
+                recommendation["status"] = "blocked"
+                recommendation["blocked_reason"] = validation.get("violations", [])
+            elif validation["action"] == "REQUIRE_APPROVAL":
+                recommendation["status"] = "pending_approval"
             else:
-                recommendation['status'] = 'approved'
+                recommendation["status"] = "approved"
         else:
-            recommendation['status'] = 'approved'
+            recommendation["status"] = "approved"
 
-        logger.info(f"Generated {domain} recommendation for {entity_id}: {recommendation['status']}")
+        logger.info(
+            f"Generated {domain} recommendation for {entity_id}: {recommendation['status']}"
+        )
         return recommendation
 
     async def batch_recommend(
@@ -112,7 +115,7 @@ class RecommendationEngine:
         domain: RecommendationDomain,
         entity_ids: List[str],
         context: Dict[str, Any],
-        user_id: Optional[str] = None
+        user_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         Generate recommendations for multiple entities.
@@ -129,16 +132,20 @@ class RecommendationEngine:
         recommendations = []
         for entity_id in entity_ids:
             try:
-                rec = await self.generate_recommendation(domain, entity_id, context, user_id)
+                rec = await self.generate_recommendation(
+                    domain, entity_id, context, user_id
+                )
                 recommendations.append(rec)
             except Exception as e:
                 logger.error(f"Failed to generate recommendation for {entity_id}: {e}")
-                recommendations.append({
-                    'domain': domain,
-                    'entity_id': entity_id,
-                    'status': 'error',
-                    'error': str(e)
-                })
+                recommendations.append(
+                    {
+                        "domain": domain,
+                        "entity_id": entity_id,
+                        "status": "error",
+                        "error": str(e),
+                    }
+                )
 
         return recommendations
 
@@ -147,7 +154,7 @@ class RecommendationEngine:
         domain: RecommendationDomain,
         limit: int = 10,
         min_confidence: float = 0.5,
-        user_id: Optional[str] = None
+        user_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         Get top recommendations for a domain.
@@ -165,13 +172,15 @@ class RecommendationEngine:
             raise ValueError(f"No recommender available for domain: {domain}")
 
         recommender = self.recommenders[domain]
-        recommendations = await recommender.get_top_recommendations(limit, min_confidence)
+        recommendations = await recommender.get_top_recommendations(
+            limit, min_confidence
+        )
 
         # Add metadata and governance checks
         for rec in recommendations:
-            rec['domain'] = domain
-            rec['generated_at'] = datetime.utcnow().isoformat()
-            rec['user_id'] = user_id
+            rec["domain"] = domain
+            rec["generated_at"] = datetime.utcnow().isoformat()
+            rec["user_id"] = user_id
 
         return recommendations
 
@@ -182,8 +191,8 @@ class RecommendationEngine:
     def get_recommender_stats(self) -> Dict[str, Any]:
         """Get statistics about recommender performance"""
         stats = {
-            'supported_domains': self.get_supported_domains(),
-            'total_recommenders': len(self.recommenders),
-            'governance_enabled': self.governance is not None
+            "supported_domains": self.get_supported_domains(),
+            "total_recommenders": len(self.recommenders),
+            "governance_enabled": self.governance is not None,
         }
         return stats

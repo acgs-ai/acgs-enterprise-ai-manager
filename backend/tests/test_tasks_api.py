@@ -17,12 +17,12 @@ async def test_create_task(client: AsyncClient):
         "description": "This is a test task",
         "status": "todo",
         "priority": "high",
-        "tags": ["test", "api"]
+        "tags": ["test", "api"],
     }
-    
+
     response = await client.post("/api/v1/tasks/", json=task_data)
     assert response.status_code == 201
-    
+
     data = response.json()
     assert data["title"] == task_data["title"]
     assert data["description"] == task_data["description"]
@@ -37,7 +37,7 @@ async def test_get_task(client: AsyncClient, sample_task):
     """Test retrieving a task by ID."""
     response = await client.get(f"/api/v1/tasks/{sample_task['id']}")
     assert response.status_code == 200
-    
+
     data = response.json()
     assert data["id"] == sample_task["id"]
     assert data["title"] == sample_task["title"]
@@ -48,7 +48,7 @@ async def test_list_tasks(client: AsyncClient, sample_task):
     """Test listing tasks with pagination."""
     response = await client.get("/api/v1/tasks/")
     assert response.status_code == 200
-    
+
     data = response.json()
     assert "items" in data
     assert "total" in data
@@ -61,15 +61,12 @@ async def test_update_task(client: AsyncClient, sample_task):
     update_data = {
         "title": "Updated Task Title",
         "status": "in_progress",
-        "priority": "urgent"
+        "priority": "urgent",
     }
-    
-    response = await client.put(
-        f"/api/v1/tasks/{sample_task['id']}",
-        json=update_data
-    )
+
+    response = await client.put(f"/api/v1/tasks/{sample_task['id']}", json=update_data)
     assert response.status_code == 200
-    
+
     data = response.json()
     assert data["title"] == update_data["title"]
     assert data["status"] == update_data["status"]
@@ -91,8 +88,8 @@ async def sample_task(client: AsyncClient):
         "description": "Sample description",
         "status": "todo",
         "priority": "medium",
-        "tags": ["sample"]
+        "tags": ["sample"],
     }
-    
+
     response = await client.post("/api/v1/tasks/", json=task_data)
     return response.json()

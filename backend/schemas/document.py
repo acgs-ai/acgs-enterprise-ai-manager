@@ -11,12 +11,13 @@ from uuid import UUID
 
 class DocumentBase(BaseModel):
     """Base document schema with common fields."""
+
     title: str = Field(..., min_length=1, max_length=255, description="Document title")
     content: Optional[str] = Field(None, description="Document content")
     type: str = Field(
         ...,
         pattern="^(specification|report|policy|procedure|contract|other)$",
-        description="Document type"
+        description="Document type",
     )
     tags: List[str] = Field(default_factory=list, description="Document tags")
     owner_id: Optional[UUID] = Field(None, description="Document owner user ID")
@@ -28,14 +29,18 @@ class DocumentBase(BaseModel):
 
 class DocumentCreate(DocumentBase):
     """Schema for creating a new document."""
+
     pass
 
 
 class DocumentUpdate(BaseModel):
     """Schema for updating a document (all fields optional)."""
+
     title: Optional[str] = Field(None, min_length=1, max_length=255)
     content: Optional[str] = None
-    type: Optional[str] = Field(None, pattern="^(specification|report|policy|procedure|contract|other)$")
+    type: Optional[str] = Field(
+        None, pattern="^(specification|report|policy|procedure|contract|other)$"
+    )
     tags: Optional[List[str]] = None
     owner_id: Optional[UUID] = None
     version: Optional[int] = Field(None, ge=1)
@@ -46,6 +51,7 @@ class DocumentUpdate(BaseModel):
 
 class DocumentResponse(DocumentBase):
     """Schema for document response."""
+
     id: UUID
     created_date: datetime
     updated_at: datetime
@@ -55,7 +61,10 @@ class DocumentResponse(DocumentBase):
 
 class DocumentFilter(BaseModel):
     """Schema for document filtering parameters."""
-    type: Optional[str] = Field(None, pattern="^(specification|report|policy|procedure|contract|other)$")
+
+    type: Optional[str] = Field(
+        None, pattern="^(specification|report|policy|procedure|contract|other)$"
+    )
     owner_id: Optional[UUID] = None
     tags: Optional[List[str]] = Field(None, description="Filter by tags")
     search: Optional[str] = Field(None, description="Search in title and content")
@@ -63,21 +72,23 @@ class DocumentFilter(BaseModel):
 
 class DocumentLinkRequest(BaseModel):
     """Schema for linking a document to an entity."""
+
     entity_type: str = Field(
         ...,
         pattern="^(project|task|asset|infrastructure|financial_record)$",
-        description="Entity type to link"
+        description="Entity type to link",
     )
     entity_id: UUID = Field(..., description="Entity ID to link")
     link_type: str = Field(
-        default='reference',
+        default="reference",
         pattern="^(attachment|reference|specification|report)$",
-        description="Link type"
+        description="Link type",
     )
 
 
 class PaginatedDocumentResponse(BaseModel):
     """Schema for paginated document list response."""
+
     items: List[DocumentResponse]
     total: int
     page: int

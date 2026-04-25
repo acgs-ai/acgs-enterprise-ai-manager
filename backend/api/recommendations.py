@@ -34,6 +34,7 @@ def get_recommendation_engine() -> RecommendationEngine:
 # Pydantic models for request/response
 class RecommendationRequest(BaseModel):
     """Request model for generating a recommendation"""
+
     domain: str = Field(..., description="Domain to generate recommendation for")
     entity_id: str = Field(..., description="Entity ID to recommend for")
     context: dict = Field(default_factory=dict, description="Additional context data")
@@ -41,6 +42,7 @@ class RecommendationRequest(BaseModel):
 
 class RecommendationResponse(BaseModel):
     """Response model for a recommendation"""
+
     id: Optional[str] = None
     domain: str
     entity_id: str
@@ -55,16 +57,21 @@ class RecommendationResponse(BaseModel):
 
 class BatchRecommendationRequest(BaseModel):
     """Request model for batch recommendations"""
+
     domain: str
     entity_ids: List[str]
     context: dict = Field(default_factory=dict)
 
 
-@router.post("/generate", response_model=RecommendationResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/generate",
+    response_model=RecommendationResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def generate_recommendation(
     request: RecommendationRequest,
     db: AsyncSession = Depends(get_db),
-    engine: RecommendationEngine = Depends(get_recommendation_engine)
+    engine: RecommendationEngine = Depends(get_recommendation_engine),
 ):
     """
     Generate a recommendation for a specific entity.
@@ -84,14 +91,12 @@ async def generate_recommendation(
         except ValueError:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid domain: {request.domain}. Supported: {engine.get_supported_domains()}"
+                detail=f"Invalid domain: {request.domain}. Supported: {engine.get_supported_domains()}",
             )
 
         # Generate recommendation
         recommendation = await engine.generate_recommendation(
-            domain=domain,
-            entity_id=request.entity_id,
-            context=request.context
+            domain=domain, entity_id=request.entity_id, context=request.context
         )
 
         # TODO: Store recommendation in database once schema is ready
@@ -106,7 +111,7 @@ async def generate_recommendation(
         logger.error(f"Failed to generate recommendation: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to generate recommendation"
+            detail="Failed to generate recommendation",
         )
 
 
@@ -114,7 +119,7 @@ async def generate_recommendation(
 async def batch_generate_recommendations(
     request: BatchRecommendationRequest,
     db: AsyncSession = Depends(get_db),
-    engine: RecommendationEngine = Depends(get_recommendation_engine)
+    engine: RecommendationEngine = Depends(get_recommendation_engine),
 ):
     """
     Generate recommendations for multiple entities.
@@ -134,25 +139,27 @@ async def batch_generate_recommendations(
         except ValueError:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid domain: {request.domain}"
+                detail=f"Invalid domain: {request.domain}",
             )
 
         # Generate batch recommendations
         recommendations = await engine.batch_recommend(
-            domain=domain,
-            entity_ids=request.entity_ids,
-            context=request.context
+            domain=domain, entity_ids=request.entity_ids, context=request.context
         )
 
         logger.info(f"Generated {len(recommendations)} recommendations for {domain}")
 
-        return [RecommendationResponse(**rec) for rec in recommendations if rec.get('status') != 'error']
+        return [
+            RecommendationResponse(**rec)
+            for rec in recommendations
+            if rec.get("status") != "error"
+        ]
 
     except Exception as e:
         logger.error(f"Failed to generate batch recommendations: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to generate batch recommendations"
+            detail="Failed to generate batch recommendations",
         )
 
 
@@ -162,7 +169,7 @@ async def get_top_recommendations(
     limit: int = Query(10, ge=1, le=100),
     min_confidence: float = Query(0.5, ge=0.0, le=1.0),
     db: AsyncSession = Depends(get_db),
-    engine: RecommendationEngine = Depends(get_recommendation_engine)
+    engine: RecommendationEngine = Depends(get_recommendation_engine),
 ):
     """
     Get top recommendations for a domain.
@@ -184,14 +191,12 @@ async def get_top_recommendations(
         except ValueError:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid domain: {domain}"
+                detail=f"Invalid domain: {domain}",
             )
 
         # Get top recommendations
         recommendations = await engine.get_top_recommendations(
-            domain=domain_enum,
-            limit=limit,
-            min_confidence=min_confidence
+            domain=domain_enum, limit=limit, min_confidence=min_confidence
         )
 
         return [RecommendationResponse(**rec) for rec in recommendations]
@@ -200,13 +205,13 @@ async def get_top_recommendations(
         logger.error(f"Failed to get top recommendations: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to get top recommendations"
+            detail="Failed to get top recommendations",
         )
 
 
 @router.get("/domains", response_model=List[str])
 async def get_supported_domains(
-    engine: RecommendationEngine = Depends(get_recommendation_engine)
+    engine: RecommendationEngine = Depends(get_recommendation_engine),
 ):
     """
     Get list of supported recommendation domains.
@@ -219,7 +224,7 @@ async def get_supported_domains(
 
 @router.get("/stats", response_model=dict)
 async def get_recommender_stats(
-    engine: RecommendationEngine = Depends(get_recommendation_engine)
+    engine: RecommendationEngine = Depends(get_recommendation_engine),
 ):
     """
     Get recommendation engine statistics.
@@ -236,5 +241,5 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "recommendations",
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.utcnow().isoformat(),
     }

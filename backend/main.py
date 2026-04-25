@@ -19,8 +19,7 @@ from backend.api import tasks, recommendations, search
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -46,13 +45,16 @@ app = FastAPI(
     title="ACGS Enterprise Manager API",
     description="Enterprise AI Agent Management System with Constitutional Governance",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 # CORS middleware configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:8080"],  # Frontend origins
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:8080",
+    ],  # Frontend origins
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -80,10 +82,7 @@ async def global_exception_handler(request: Request, exc: Exception):
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={
-            "detail": "Internal server error",
-            "type": "internal_error"
-        }
+        content={"detail": "Internal server error", "type": "internal_error"},
     )
 
 
@@ -94,7 +93,7 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "acgs-enterprise-manager",
-        "version": "1.0.0"
+        "version": "1.0.0",
     }
 
 
@@ -106,22 +105,21 @@ async def root():
         "message": "ACGS Enterprise Manager API",
         "version": "1.0.0",
         "docs": "/docs",
-        "health": "/health"
+        "health": "/health",
     }
 
 
 # Register API routers
 app.include_router(tasks.router, prefix="/api/v1/tasks", tags=["Tasks"])
-app.include_router(recommendations.router, prefix="/api/v1/recommendations", tags=["Recommendations"])
+app.include_router(
+    recommendations.router, prefix="/api/v1/recommendations", tags=["Recommendations"]
+)
 app.include_router(search.router, prefix="/api/v1/search", tags=["Search"])
 
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(
-        "backend.main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-        log_level="info"
+        "backend.main:app", host="0.0.0.0", port=8000, reload=True, log_level="info"
     )

@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 class EventType(str, Enum):
     """Enumeration of system event types."""
+
     # Project events
     PROJECT_CREATED = "project.created"
     PROJECT_UPDATED = "project.updated"
@@ -45,6 +46,7 @@ class EventType(str, Enum):
 @dataclass
 class Event:
     """Event data structure."""
+
     event_type: EventType
     payload: Dict[str, Any]
     event_id: UUID = field(default_factory=uuid4)
@@ -120,7 +122,9 @@ class EventBus:
                 if isinstance(result, Exception):
                     logger.error(f"Handler {handlers[i].__name__} failed: {result}")
 
-    def get_event_history(self, event_type: Optional[EventType] = None, limit: int = 100) -> List[Event]:
+    def get_event_history(
+        self, event_type: Optional[EventType] = None, limit: int = 100
+    ) -> List[Event]:
         """
         Get event history, optionally filtered by type.
 
@@ -153,7 +157,7 @@ async def emit_event(
     event_type: EventType,
     payload: Dict[str, Any],
     source: Optional[str] = None,
-    correlation_id: Optional[UUID] = None
+    correlation_id: Optional[UUID] = None,
 ):
     """
     Convenience function to emit an event.
@@ -168,7 +172,7 @@ async def emit_event(
         event_type=event_type,
         payload=payload,
         source=source,
-        correlation_id=correlation_id
+        correlation_id=correlation_id,
     )
     bus = get_event_bus()
     await bus.publish(event)

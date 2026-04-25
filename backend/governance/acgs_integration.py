@@ -14,6 +14,7 @@ from pathlib import Path
 
 try:
     from acgs_lite import Constitution, GovernanceEngine
+
     ACGS_AVAILABLE = True
 except ImportError:
     ACGS_AVAILABLE = False
@@ -21,7 +22,6 @@ except ImportError:
 
 from .rules_engine import RulesEngine
 from .audit_logger import AuditLogger
-
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ class ACGSIntegration:
         self,
         constitution_path: Optional[str] = None,
         fail_closed: bool = True,
-        audit_enabled: bool = True
+        audit_enabled: bool = True,
     ):
         """
         Initialize ACGS governance integration.
@@ -56,7 +56,7 @@ class ACGSIntegration:
             constitution_path = os.path.join(
                 os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
                 "config",
-                "governance_rules.yaml"
+                "governance_rules.yaml",
             )
 
         self.constitution_path = constitution_path
@@ -80,22 +80,21 @@ class ACGSIntegration:
                 return
 
             # Load constitution from YAML
-            with open(self.constitution_path, 'r') as f:
+            with open(self.constitution_path, "r") as f:
                 constitution_yaml = f.read()
 
             constitution = Constitution.from_yaml(constitution_yaml)
             self.acgs_engine = GovernanceEngine(constitution)
 
-            logger.info(f"ACGS governance engine initialized with constitution: {self.constitution_path}")
+            logger.info(
+                f"ACGS governance engine initialized with constitution: {self.constitution_path}"
+            )
         except Exception as e:
             logger.error(f"Failed to initialize ACGS engine: {e}")
             self.acgs_engine = None
 
     def validate_operation(
-        self,
-        operation: str,
-        context: Dict[str, Any],
-        agent_id: str = "default"
+        self, operation: str, context: Dict[str, Any], agent_id: str = "default"
     ) -> Dict[str, Any]:
         """
         Validate an AI operation against governance rules (MACI: Monitor phase).
@@ -123,34 +122,38 @@ class ACGSIntegration:
                 acgs_result = self.acgs_engine.validate(operation, agent_id=agent_id)
                 # Merge results (fail-closed: if either fails, operation is blocked)
                 if not acgs_result.valid:
-                    validation_result['valid'] = False
-                    validation_result['violations'].extend([
-                        {
-                            'rule_id': v.rule_id,
-                            'severity': v.severity,
-                            'description': v.description
-                        }
-                        for v in acgs_result.violations
-                    ])
+                    validation_result["valid"] = False
+                    validation_result["violations"].extend(
+                        [
+                            {
+                                "rule_id": v.rule_id,
+                                "severity": v.severity,
+                                "description": v.description,
+                            }
+                            for v in acgs_result.violations
+                        ]
+                    )
             except Exception as e:
                 logger.error(f"ACGS validation error: {e}")
                 if self.fail_closed:
-                    validation_result['valid'] = False
-                    validation_result['violations'].append({
-                        'rule_id': 'system-error',
-                        'severity': 'CRITICAL',
-                        'description': f'Governance validation error: {str(e)}'
-                    })
+                    validation_result["valid"] = False
+                    validation_result["violations"].append(
+                        {
+                            "rule_id": "system-error",
+                            "severity": "CRITICAL",
+                            "description": f"Governance validation error: {str(e)}",
+                        }
+                    )
 
         # Determine action based on validation
-        if not validation_result['valid']:
-            action = 'BLOCK' if self.fail_closed else 'WARN'
-        elif validation_result.get('requires_approval', False):
-            action = 'REQUIRE_APPROVAL'
+        if not validation_result["valid"]:
+            action = "BLOCK" if self.fail_closed else "WARN"
+        elif validation_result.get("requires_approval", False):
+            action = "REQUIRE_APPROVAL"
         else:
-            action = 'ALLOW'
+            action = "ALLOW"
 
-        validation_result['action'] = action
+        validation_result["action"] = action
 
         # Log to audit trail
         if self.audit_logger:
@@ -159,9 +162,9 @@ class ACGSIntegration:
                 context=context,
                 validation_result=validation_result,
                 agent_id=agent_id,
-                duration_ms=(datetime.utcnow() - start_time).total_seconds() * 1000
+                duration_ms=(datetime.utcnow() - start_time).total_seconds() * 1000,
             )
-            validation_result['decision_id'] = decision_id
+            validation_result["decision_id"] = decision_id
 
         return validation_result
 
@@ -170,7 +173,7 @@ class ACGSIntegration:
         operation: str,
         context: Dict[str, Any],
         agent_id: str = "default",
-        timeout_seconds: int = 3600
+        timeout_seconds: int = 3600,
     ) -> Dict[str, Any]:
         """
         Request human approval for an operation (MACI: Approve phase).
@@ -185,13 +188,13 @@ class ACGSIntegration:
             Dict containing approval request details
         """
         approval_request = {
-            'request_id': self._generate_request_id(),
-            'operation': operation,
-            'context': context,
-            'agent_id': agent_id,
-            'requested_at': datetime.utcnow().isoformat(),
-            'timeout_seconds': timeout_seconds,
-            'status': 'PENDING'
+            "request_id": self._generate_request_id(),
+            "operation": operation,
+            "context": context,
+            "agent_id": agent_id,
+            "requested_at": datetime.utcnow().isoformat(),
+            "timeout_seconds": timeout_seconds,
+            "status": "PENDING",
         }
 
         if self.audit_logger:
@@ -202,9 +205,7 @@ class ACGSIntegration:
         return approval_request
 
     def enforce_decision(
-        self,
-        validation_result: Dict[str, Any],
-        operation: str
+        self, validation_result: Dict[str, Any], operation: str
     ) -> bool:
         """
         Enforce governance decision (MACI: Control phase).
@@ -216,21 +217,21 @@ class ACGSIntegration:
         Returns:
             True if operation is allowed to proceed, False otherwise
         """
-        action = validation_result.get('action', 'BLOCK')
+        action = validation_result.get("action", "BLOCK")
 
-        if action == 'ALLOW':
+        if action == "ALLOW":
             logger.info(f"Operation allowed: {operation[:100]}")
             return True
-        elif action == 'BLOCK':
+        elif action == "BLOCK":
             logger.warning(f"Operation blocked: {operation[:100]}")
             if self.audit_logger:
                 self.audit_logger.log_enforcement(
                     operation=operation,
-                    action='BLOCKED',
-                    reason=validation_result.get('violations', [])
+                    action="BLOCKED",
+                    reason=validation_result.get("violations", []),
                 )
             return False
-        elif action == 'REQUIRE_APPROVAL':
+        elif action == "REQUIRE_APPROVAL":
             logger.info(f"Operation requires approval: {operation[:100]}")
             # In production, this would integrate with approval workflow
             return False
@@ -244,7 +245,7 @@ class ACGSIntegration:
         agent_id: Optional[str] = None,
         start_time: Optional[datetime] = None,
         end_time: Optional[datetime] = None,
-        limit: int = 100
+        limit: int = 100,
     ) -> List[Dict[str, Any]]:
         """
         Inspect audit trail (MACI: Inspect phase).
@@ -263,10 +264,7 @@ class ACGSIntegration:
             return []
 
         return self.audit_logger.query_audit_trail(
-            agent_id=agent_id,
-            start_time=start_time,
-            end_time=end_time,
-            limit=limit
+            agent_id=agent_id, start_time=start_time, end_time=end_time, limit=limit
         )
 
     def get_governance_status(self) -> Dict[str, Any]:
@@ -277,18 +275,19 @@ class ACGSIntegration:
             Dict containing status information
         """
         return {
-            'acgs_available': ACGS_AVAILABLE,
-            'acgs_engine_initialized': self.acgs_engine is not None,
-            'fail_closed': self.fail_closed,
-            'audit_enabled': self.audit_enabled,
-            'constitution_path': self.constitution_path,
-            'rules_count': len(self.rules_engine.rules) if self.rules_engine else 0
+            "acgs_available": ACGS_AVAILABLE,
+            "acgs_engine_initialized": self.acgs_engine is not None,
+            "fail_closed": self.fail_closed,
+            "audit_enabled": self.audit_enabled,
+            "constitution_path": self.constitution_path,
+            "rules_count": len(self.rules_engine.rules) if self.rules_engine else 0,
         }
 
     @staticmethod
     def _generate_request_id() -> str:
         """Generate unique request ID."""
         import uuid
+
         return f"req_{uuid.uuid4().hex[:16]}"
 
 
@@ -307,7 +306,7 @@ def get_governance() -> ACGSIntegration:
 def initialize_governance(
     constitution_path: Optional[str] = None,
     fail_closed: bool = True,
-    audit_enabled: bool = True
+    audit_enabled: bool = True,
 ) -> ACGSIntegration:
     """
     Initialize the global governance instance.
@@ -324,6 +323,6 @@ def initialize_governance(
     _governance_instance = ACGSIntegration(
         constitution_path=constitution_path,
         fail_closed=fail_closed,
-        audit_enabled=audit_enabled
+        audit_enabled=audit_enabled,
     )
     return _governance_instance

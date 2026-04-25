@@ -26,13 +26,15 @@ class LearningEngine:
         self.name = "Learning Engine"
         # In-memory storage for feedback (will integrate with database later)
         self.feedback_history = []
-        self.performance_metrics = defaultdict(lambda: {
-            'total': 0,
-            'accepted': 0,
-            'rejected': 0,
-            'modified': 0,
-            'avg_confidence': 0.0
-        })
+        self.performance_metrics = defaultdict(
+            lambda: {
+                "total": 0,
+                "accepted": 0,
+                "rejected": 0,
+                "modified": 0,
+                "avg_confidence": 0.0,
+            }
+        )
         logger.info(f"{self.name} initialized")
 
     async def process_feedback(
@@ -40,7 +42,7 @@ class LearningEngine:
         recommendation_id: str,
         feedback_type: str,
         feedback_data: Dict[str, Any],
-        user_id: Optional[str] = None
+        user_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Process user feedback on a recommendation.
@@ -54,35 +56,37 @@ class LearningEngine:
         Returns:
             Processing result with learning updates
         """
-        if feedback_type not in ['accepted', 'rejected', 'modified']:
+        if feedback_type not in ["accepted", "rejected", "modified"]:
             raise ValueError(f"Invalid feedback type: {feedback_type}")
 
         # Store feedback
         feedback_record = {
-            'recommendation_id': recommendation_id,
-            'feedback_type': feedback_type,
-            'feedback_data': feedback_data,
-            'user_id': user_id,
-            'timestamp': datetime.utcnow().isoformat()
+            "recommendation_id": recommendation_id,
+            "feedback_type": feedback_type,
+            "feedback_data": feedback_data,
+            "user_id": user_id,
+            "timestamp": datetime.utcnow().isoformat(),
         }
         self.feedback_history.append(feedback_record)
 
         # Extract domain and update metrics
-        domain = feedback_data.get('domain', 'unknown')
-        confidence = feedback_data.get('confidence', 0.0)
+        domain = feedback_data.get("domain", "unknown")
+        confidence = feedback_data.get("confidence", 0.0)
 
         metrics = self.performance_metrics[domain]
-        metrics['total'] += 1
+        metrics["total"] += 1
         metrics[feedback_type] += 1
 
         # Update running average confidence
-        total = metrics['total']
-        metrics['avg_confidence'] = (
-            (metrics['avg_confidence'] * (total - 1) + confidence) / total
-        )
+        total = metrics["total"]
+        metrics["avg_confidence"] = (
+            metrics["avg_confidence"] * (total - 1) + confidence
+        ) / total
 
         # Calculate acceptance rate
-        acceptance_rate = metrics['accepted'] / metrics['total'] if metrics['total'] > 0 else 0
+        acceptance_rate = (
+            metrics["accepted"] / metrics["total"] if metrics["total"] > 0 else 0
+        )
 
         logger.info(
             f"Feedback processed: {domain} - {feedback_type} "
@@ -91,15 +95,15 @@ class LearningEngine:
 
         # Trigger learning update if enough feedback accumulated
         learning_update = None
-        if metrics['total'] % 10 == 0:  # Every 10 feedback items
+        if metrics["total"] % 10 == 0:  # Every 10 feedback items
             learning_update = await self._update_model(domain)
 
         return {
-            'feedback_id': len(self.feedback_history),
-            'processed_at': datetime.utcnow().isoformat(),
-            'domain_metrics': dict(metrics),
-            'acceptance_rate': acceptance_rate,
-            'learning_update': learning_update
+            "feedback_id": len(self.feedback_history),
+            "processed_at": datetime.utcnow().isoformat(),
+            "domain_metrics": dict(metrics),
+            "acceptance_rate": acceptance_rate,
+            "learning_update": learning_update,
         }
 
     async def _update_model(self, domain: str) -> Dict[str, Any]:
@@ -115,8 +119,8 @@ class LearningEngine:
         metrics = self.performance_metrics[domain]
 
         # Calculate adjustments based on feedback patterns
-        acceptance_rate = metrics['accepted'] / metrics['total']
-        rejection_rate = metrics['rejected'] / metrics['total']
+        acceptance_rate = metrics["accepted"] / metrics["total"]
+        rejection_rate = metrics["rejected"] / metrics["total"]
 
         # Confidence calibration adjustment
         confidence_adjustment = 0.0
@@ -128,21 +132,19 @@ class LearningEngine:
             confidence_adjustment = -0.05
 
         update = {
-            'domain': domain,
-            'updated_at': datetime.utcnow().isoformat(),
-            'feedback_count': metrics['total'],
-            'acceptance_rate': acceptance_rate,
-            'confidence_adjustment': confidence_adjustment,
-            'status': 'applied'
+            "domain": domain,
+            "updated_at": datetime.utcnow().isoformat(),
+            "feedback_count": metrics["total"],
+            "acceptance_rate": acceptance_rate,
+            "confidence_adjustment": confidence_adjustment,
+            "status": "applied",
         }
 
         logger.info(f"Model updated for {domain}: {update}")
         return update
 
     async def get_performance_metrics(
-        self,
-        domain: Optional[str] = None,
-        time_window_days: Optional[int] = None
+        self, domain: Optional[str] = None, time_window_days: Optional[int] = None
     ) -> Dict[str, Any]:
         """
         Get performance metrics for recommendations.
@@ -157,9 +159,13 @@ class LearningEngine:
         if domain:
             metrics = dict(self.performance_metrics[domain])
             return {
-                'domain': domain,
-                'metrics': metrics,
-                'acceptance_rate': metrics['accepted'] / metrics['total'] if metrics['total'] > 0 else 0
+                "domain": domain,
+                "metrics": metrics,
+                "acceptance_rate": (
+                    metrics["accepted"] / metrics["total"]
+                    if metrics["total"] > 0
+                    else 0
+                ),
             }
 
         # Return all domains
@@ -167,18 +173,17 @@ class LearningEngine:
         for dom, metrics in self.performance_metrics.items():
             all_metrics[dom] = {
                 **dict(metrics),
-                'acceptance_rate': metrics['accepted'] / metrics['total'] if metrics['total'] > 0 else 0
+                "acceptance_rate": (
+                    metrics["accepted"] / metrics["total"]
+                    if metrics["total"] > 0
+                    else 0
+                ),
             }
 
-        return {
-            'domains': all_metrics,
-            'total_feedback': len(self.feedback_history)
-        }
+        return {"domains": all_metrics, "total_feedback": len(self.feedback_history)}
 
     async def get_improvement_trends(
-        self,
-        domain: str,
-        window_size: int = 10
+        self, domain: str, window_size: int = 10
     ) -> Dict[str, Any]:
         """
         Calculate improvement trends over time.
@@ -192,27 +197,30 @@ class LearningEngine:
         """
         # Filter feedback for domain
         domain_feedback = [
-            f for f in self.feedback_history
-            if f['feedback_data'].get('domain') == domain
+            f
+            for f in self.feedback_history
+            if f["feedback_data"].get("domain") == domain
         ]
 
         if len(domain_feedback) < window_size:
             return {
-                'domain': domain,
-                'status': 'insufficient_data',
-                'feedback_count': len(domain_feedback),
-                'required': window_size
+                "domain": domain,
+                "status": "insufficient_data",
+                "feedback_count": len(domain_feedback),
+                "required": window_size,
             }
 
         # Calculate acceptance rate for recent window
         recent = domain_feedback[-window_size:]
-        recent_accepted = sum(1 for f in recent if f['feedback_type'] == 'accepted')
+        recent_accepted = sum(1 for f in recent if f["feedback_type"] == "accepted")
         recent_rate = recent_accepted / len(recent)
 
         # Calculate acceptance rate for previous window
         if len(domain_feedback) >= window_size * 2:
-            previous = domain_feedback[-window_size*2:-window_size]
-            previous_accepted = sum(1 for f in previous if f['feedback_type'] == 'accepted')
+            previous = domain_feedback[-window_size * 2 : -window_size]
+            previous_accepted = sum(
+                1 for f in previous if f["feedback_type"] == "accepted"
+            )
             previous_rate = previous_accepted / len(previous)
             improvement = recent_rate - previous_rate
         else:
@@ -220,12 +228,16 @@ class LearningEngine:
             improvement = None
 
         return {
-            'domain': domain,
-            'recent_acceptance_rate': recent_rate,
-            'previous_acceptance_rate': previous_rate,
-            'improvement': improvement,
-            'trend': 'improving' if improvement and improvement > 0 else 'stable' if improvement == 0 else 'declining',
-            'window_size': window_size
+            "domain": domain,
+            "recent_acceptance_rate": recent_rate,
+            "previous_acceptance_rate": previous_rate,
+            "improvement": improvement,
+            "trend": (
+                "improving"
+                if improvement and improvement > 0
+                else "stable" if improvement == 0 else "declining"
+            ),
+            "window_size": window_size,
         }
 
     async def get_feature_importance(self, domain: str) -> Dict[str, Any]:
@@ -240,29 +252,26 @@ class LearningEngine:
         """
         # Stub implementation - will be enhanced with actual ML analysis
         domain_feedback = [
-            f for f in self.feedback_history
-            if f['feedback_data'].get('domain') == domain
+            f
+            for f in self.feedback_history
+            if f["feedback_data"].get("domain") == domain
         ]
 
         if not domain_feedback:
-            return {
-                'domain': domain,
-                'status': 'no_data',
-                'features': {}
-            }
+            return {"domain": domain, "status": "no_data", "features": {}}
 
         # Placeholder feature importance
         features = {
-            'confidence_score': 0.8,
-            'rationale_quality': 0.7,
-            'timeliness': 0.6,
-            'relevance': 0.9
+            "confidence_score": 0.8,
+            "rationale_quality": 0.7,
+            "timeliness": 0.6,
+            "relevance": 0.9,
         }
 
         return {
-            'domain': domain,
-            'features': features,
-            'feedback_count': len(domain_feedback)
+            "domain": domain,
+            "features": features,
+            "feedback_count": len(domain_feedback),
         }
 
     def get_learning_stats(self) -> Dict[str, Any]:
@@ -270,17 +279,19 @@ class LearningEngine:
         total_feedback = len(self.feedback_history)
         domains_tracked = len(self.performance_metrics)
 
-        overall_accepted = sum(m['accepted'] for m in self.performance_metrics.values())
-        overall_total = sum(m['total'] for m in self.performance_metrics.values())
-        overall_acceptance = overall_accepted / overall_total if overall_total > 0 else 0
+        overall_accepted = sum(m["accepted"] for m in self.performance_metrics.values())
+        overall_total = sum(m["total"] for m in self.performance_metrics.values())
+        overall_acceptance = (
+            overall_accepted / overall_total if overall_total > 0 else 0
+        )
 
         return {
-            'total_feedback': total_feedback,
-            'domains_tracked': domains_tracked,
-            'overall_acceptance_rate': overall_acceptance,
-            'learning_updates_applied': sum(
-                m['total'] // 10 for m in self.performance_metrics.values()
-            )
+            "total_feedback": total_feedback,
+            "domains_tracked": domains_tracked,
+            "overall_acceptance_rate": overall_acceptance,
+            "learning_updates_applied": sum(
+                m["total"] // 10 for m in self.performance_metrics.values()
+            ),
         }
 
 
