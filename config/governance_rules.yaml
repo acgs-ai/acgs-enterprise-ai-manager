@@ -1,0 +1,177 @@
+# ACGS-Lite Constitutional Governance Rules
+# Enterprise AI Agent Governance Framework
+
+constitutional_hash: acgs_enterprise_v1_2026
+
+metadata:
+  version: "1.0.0"
+  created: "2026-04-25"
+  description: "Enterprise governance rules for ACGS Manager AI operations"
+  compliance_frameworks:
+    - "EU AI Act"
+    - "SOC 2"
+    - "ISO 27001"
+
+# MACI Pattern Implementation
+# Monitor - Approve - Control - Inspect
+
+rules:
+  # === CRITICAL SAFETY RULES ===
+  - id: no-harmful-actions
+    pattern: "harm|kill|destroy|attack|exploit|weaponize"
+    severity: CRITICAL
+    action: BLOCK
+    description: "Block any harmful or destructive actions"
+    maci_phase: MONITOR
+
+  - id: no-pii-leakage
+    pattern: "SSN|social security|passport|credit card|CVV|driver license"
+    severity: CRITICAL
+    action: BLOCK
+    description: "Prevent PII data leakage"
+    maci_phase: MONITOR
+
+  - id: no-unauthorized-data-deletion
+    pattern: "DELETE FROM|DROP TABLE|TRUNCATE|rm -rf"
+    severity: CRITICAL
+    action: REQUIRE_APPROVAL
+    description: "Require human approval for data deletion operations"
+    maci_phase: APPROVE
+    approval_required: true
+    approvers:
+      - role: "admin"
+      - role: "data_steward"
+
+  # === HIGH SEVERITY RULES ===
+  - id: financial-transaction-limit
+    pattern: "amount|transaction|payment"
+    severity: HIGH
+    action: VALIDATE
+    description: "Validate financial transactions against limits"
+    maci_phase: CONTROL
+    validation:
+      max_amount: 10000
+      require_approval_above: 5000
+
+  - id: infrastructure-changes
+    pattern: "provision|deploy|scale|terminate|instance"
+    severity: HIGH
+    action: REQUIRE_APPROVAL
+    description: "Infrastructure changes require approval"
+    maci_phase: APPROVE
+    approval_required: true
+
+  - id: cross-domain-data-access
+    pattern: "JOIN|UNION|cross_domain"
+    severity: HIGH
+    action: AUDIT
+    description: "Audit all cross-domain data access"
+    maci_phase: INSPECT
+
+  # === MEDIUM SEVERITY RULES ===
+  - id: ai-recommendation-threshold
+    pattern: "recommend|suggest|propose"
+    severity: MEDIUM
+    action: VALIDATE
+    description: "AI recommendations must meet confidence threshold"
+    maci_phase: CONTROL
+    validation:
+      min_confidence: 0.75
+      require_explanation: true
+
+  - id: automated-workflow-execution
+    pattern: "workflow|automation|trigger"
+    severity: MEDIUM
+    action: AUDIT
+    description: "Audit all automated workflow executions"
+    maci_phase: INSPECT
+
+  - id: bulk-operations
+    pattern: "bulk|batch|mass"
+    severity: MEDIUM
+    action: VALIDATE
+    description: "Validate bulk operations for safety"
+    maci_phase: CONTROL
+    validation:
+      max_batch_size: 1000
+      require_preview: true
+
+  # === COMPLIANCE RULES ===
+  - id: data-retention-policy
+    pattern: "archive|delete|purge|retention"
+    severity: MEDIUM
+    action: VALIDATE
+    description: "Enforce data retention policies"
+    maci_phase: CONTROL
+    validation:
+      min_retention_days: 90
+      max_retention_days: 2555  # 7 years
+
+  - id: audit-trail-integrity
+    pattern: "audit|log|trail"
+    severity: HIGH
+    action: PROTECT
+    description: "Protect audit trail integrity"
+    maci_phase: INSPECT
+    immutable: true
+
+  - id: access-control-validation
+    pattern: "access|permission|role|grant"
+    severity: HIGH
+    action: VALIDATE
+    description: "Validate access control changes"
+    maci_phase: CONTROL
+
+  # === AI-SPECIFIC RULES ===
+  - id: ai-autonomous-operations
+    pattern: "autonomous|auto_execute|self_modify"
+    severity: CRITICAL
+    action: REQUIRE_APPROVAL
+    description: "AI autonomous operations require governance gate approval"
+    maci_phase: APPROVE
+    approval_required: true
+    governance_gate: true
+
+  - id: ai-learning-feedback
+    pattern: "learn|train|feedback|model_update"
+    severity: MEDIUM
+    action: AUDIT
+    description: "Audit all AI learning and feedback operations"
+    maci_phase: INSPECT
+
+  - id: ai-confidence-threshold
+    pattern: "confidence|probability|certainty"
+    severity: MEDIUM
+    action: VALIDATE
+    description: "Enforce minimum confidence thresholds"
+    maci_phase: CONTROL
+    validation:
+      min_confidence: 0.70
+
+# Fail-closed enforcement configuration
+enforcement:
+  default_action: BLOCK
+  fail_mode: CLOSED
+  require_explicit_allow: true
+
+# Audit configuration
+audit:
+  enabled: true
+  tamper_evident: true
+  retention_days: 2555  # 7 years
+  log_all_decisions: true
+  include_context: true
+
+# Approval workflow configuration
+approval_workflow:
+  enabled: true
+  timeout_seconds: 3600  # 1 hour
+  escalation_enabled: true
+  escalation_timeout_seconds: 7200  # 2 hours
+
+# Monitoring configuration
+monitoring:
+  enabled: true
+  alert_on_violations: true
+  alert_on_approval_required: true
+  metrics_enabled: true
