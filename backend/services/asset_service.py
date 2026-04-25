@@ -32,7 +32,7 @@ class ITAssetService:
         asset = ITAsset(**asset_data.model_dump())
         db.add(asset)
         await db.commit()
-        await db.refresh(asset)
+        await db.refresh(asset, ["owner", "project", "tasks"])
         return asset
 
     @staticmethod

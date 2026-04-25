@@ -23,7 +23,7 @@ class SearchIndex(Base):
     title = Column(String(255))
     content = Column(Text)
     tags = Column(JSONB, default=[])
-    metadata = Column(JSONB)
+    extra_data = Column(JSONB)  # Renamed from metadata (SQLAlchemy reserved word)
     search_vector = Column(TSVECTOR)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(

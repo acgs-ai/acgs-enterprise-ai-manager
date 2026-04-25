@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 import logging
 
-from backend.models.financial import FinancialRecord
+from backend.models.financial_record import FinancialRecord
 
 logger = logging.getLogger(__name__)
 

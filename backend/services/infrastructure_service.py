@@ -27,7 +27,7 @@ class InfrastructureService:
         infra = Infrastructure(**infra_data.model_dump())
         db.add(infra)
         await db.commit()
-        await db.refresh(infra)
+        await db.refresh(infra, ["tasks"])
         return infra
 
     @staticmethod
@@ -91,7 +91,7 @@ class InfrastructureService:
             setattr(infra, field, value)
 
         await db.commit()
-        await db.refresh(infra)
+        await db.refresh(infra, ["tasks"])
         return infra
 
     @staticmethod

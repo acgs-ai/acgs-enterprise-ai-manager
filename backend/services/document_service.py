@@ -21,7 +21,7 @@ class DocumentService:
         doc = Document(**doc_data.model_dump())
         db.add(doc)
         await db.commit()
-        await db.refresh(doc)
+        await db.refresh(doc, ["owner"])
         return doc
 
     @staticmethod
@@ -85,7 +85,7 @@ class DocumentService:
             setattr(doc, field, value)
 
         await db.commit()
-        await db.refresh(doc)
+        await db.refresh(doc, ["owner"])
         return doc
 
     @staticmethod

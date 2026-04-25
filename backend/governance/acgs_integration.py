@@ -79,11 +79,8 @@ class ACGSIntegration:
                 logger.error(f"Constitution file not found: {self.constitution_path}")
                 return
 
-            # Load constitution from YAML
-            with open(self.constitution_path, "r") as f:
-                constitution_yaml = f.read()
-
-            constitution = Constitution.from_yaml(constitution_yaml)
+            # Load constitution from YAML file (pass path, not content)
+            constitution = Constitution.from_yaml(self.constitution_path)
             self.acgs_engine = GovernanceEngine(constitution)
 
             logger.info(

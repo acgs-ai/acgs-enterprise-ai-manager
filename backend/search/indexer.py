@@ -68,7 +68,7 @@ class SearchIndexer:
             existing.title = title
             existing.content = content
             existing.tags = tags or []
-            existing.metadata = metadata
+            existing.extra_data = metadata
 
             # Update search vector using PostgreSQL function
             await db.execute(

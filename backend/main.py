@@ -15,7 +15,17 @@ from backend.middleware.governance_interceptor import GovernanceMiddleware
 from backend.auth.dependencies import get_current_user
 
 # Import API routers
-from backend.api import tasks, recommendations, search
+from backend.api import (
+    tasks,
+    recommendations,
+    search,
+    projects,
+    assets,
+    infrastructure,
+    documents,
+    financial,
+    reports,
+)
 
 # Configure logging
 logging.basicConfig(
@@ -115,6 +125,14 @@ app.include_router(
     recommendations.router, prefix="/api/v1/recommendations", tags=["Recommendations"]
 )
 app.include_router(search.router, prefix="/api/v1/search", tags=["Search"])
+app.include_router(projects.router, prefix="/api/v1/projects", tags=["Projects"])
+app.include_router(assets.router, prefix="/api/v1/assets", tags=["IT Assets"])
+app.include_router(
+    infrastructure.router, prefix="/api/v1/infrastructure", tags=["Infrastructure"]
+)
+app.include_router(documents.router, prefix="/api/v1/documents", tags=["Documents"])
+app.include_router(financial.router, prefix="/api/v1/financial", tags=["Financial"])
+app.include_router(reports.router, prefix="/api/v1/reports", tags=["Reports"])
 
 
 if __name__ == "__main__":

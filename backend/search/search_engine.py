@@ -132,7 +132,7 @@ class SearchEngine:
                     title=index_entry.title or "",
                     content=index_entry.content,
                     tags=index_entry.tags or [],
-                    metadata=index_entry.metadata,
+                    metadata=index_entry.extra_data,
                     relevance_score=relevance_score,
                     highlight=highlight,
                 )
@@ -215,7 +215,7 @@ class SearchEngine:
                     title=entry.title or "",
                     content=entry.content,
                     tags=entry.tags or [],
-                    metadata=entry.metadata,
+                    metadata=entry.extra_data,
                     relevance_score=1.0,  # No relevance scoring for tag-only search
                     highlight=None,
                 )

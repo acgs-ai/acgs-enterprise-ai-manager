@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 import logging
 
-from backend.models.asset import Asset
+from backend.models.asset import ITAsset as Asset
 
 logger = logging.getLogger(__name__)
 

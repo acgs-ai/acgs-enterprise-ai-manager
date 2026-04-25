@@ -27,7 +27,7 @@ class FinancialService:
         record = FinancialRecord(**record_data.model_dump())
         db.add(record)
         await db.commit()
-        await db.refresh(record)
+        await db.refresh(record, ["project", "approver"])
         return record
 
     @staticmethod
@@ -100,7 +100,7 @@ class FinancialService:
             setattr(record, field, value)
 
         await db.commit()
-        await db.refresh(record)
+        await db.refresh(record, ["project", "approver"])
         return record
 
     @staticmethod
@@ -125,7 +125,7 @@ class FinancialService:
         record.approval_status = "approved"
         record.approved_by = approver_id
         await db.commit()
-        await db.refresh(record)
+        await db.refresh(record, ["project", "approver"])
         return record
 
     @staticmethod
@@ -140,5 +140,5 @@ class FinancialService:
         record.approval_status = "rejected"
         record.approved_by = approver_id
         await db.commit()
-        await db.refresh(record)
+        await db.refresh(record, ["project", "approver"])
         return record
