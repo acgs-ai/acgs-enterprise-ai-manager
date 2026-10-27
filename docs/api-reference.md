@@ -33,8 +33,13 @@ Authorization: Bearer <access token from your IdP>
 - Claims `exp`, `iat`, `sub`, `iss` and `aud` are required. `iss` must equal
   `AUTH_JWT_ISSUER` and `aud` must contain `AUTH_JWT_AUDIENCE`. 30 seconds of
   clock skew is tolerated.
-- The role is read from the `AUTH_ROLE_CLAIM` claim (default `role`). Roles rank
-  `admin > manager > user > viewer`. A missing or unknown role is treated as `viewer`.
+- The role is read from the `AUTH_ROLE_CLAIM` claim (default `role`) of the
+  **access token**. Roles rank `admin > manager > user > viewer`. A missing or
+  unknown role is treated as `viewer`.
+- The claim must be a single top-level string with an exact lowercase value
+  (`"manager"`). `"Admin"`, a list such as `["admin"]`, or a nested claim (e.g.
+  Keycloak `realm_access.roles`) all count as `viewer`. A role placed only in the
+  ID token is never seen by the API, so every user would be read-only.
 
 ### Configuration
 

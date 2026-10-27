@@ -55,10 +55,6 @@ The application includes CRUD interfaces for 6 domains:
 5. **Financial** - Income and expense tracking
 6. **Documents** - Document management with categorization
 
-## Authentication
-
-The application uses JWT token-based authentication. Tokens are stored in localStorage and automatically included in API requests.
-
 ## API Integration
 
 The frontend connects to the FastAPI backend at `http://localhost:8000`. API endpoints are proxied through Vite during development.
@@ -83,6 +79,11 @@ The app signs users in through an external OIDC identity provider using Authoriz
    access token, never the ID token.
 4. Silent renewal uses refresh tokens (no iframe): allow the refresh-token grant for the client and include
    `offline_access` in `VITE_OIDC_SCOPE` if the IdP requires it.
+5. Put the user's role in the **access token** as a top-level string claim named `role` (or whatever the
+   backend's `AUTH_ROLE_CLAIM` says), with an exact lowercase value: `viewer`, `user`, `manager` or
+   `admin`. The API never sees the ID token, so a role that exists only there makes every user read-only.
+   `"Admin"`, a list like `["admin"]`, or a nested claim also count as `viewer`. After setup, sign in with
+   a non-admin account and try one edit to confirm.
 
 Tokens live in `sessionStorage` (cleared when the tab closes), never `localStorage`. On a 401 the client
 tries one silent renew, then restarts login with the current route as `returnTo` (same-origin paths only).
