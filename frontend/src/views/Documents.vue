@@ -83,7 +83,7 @@ const fetchDocuments = async () => {
   loading.value = true
   error.value = ''
   try {
-    const response = await apiClient.get('/documents')
+    const response = await apiClient.get('/documents/')
     documents.value = response.data
   } catch (err) {
     error.value = 'Failed to load documents'
@@ -98,7 +98,7 @@ const saveDocument = async () => {
     if (editingDoc.value) {
       await apiClient.put(`/documents/${editingDoc.value.id}`, form.value)
     } else {
-      await apiClient.post('/documents', form.value)
+      await apiClient.post('/documents/', form.value)
     }
     await fetchDocuments()
     cancelForm()

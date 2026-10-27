@@ -93,7 +93,7 @@ const fetchTasks = async () => {
   loading.value = true
   error.value = ''
   try {
-    const response = await apiClient.get('/tasks')
+    const response = await apiClient.get('/tasks/')
     tasks.value = response.data
   } catch (err) {
     error.value = 'Failed to load tasks'
@@ -108,7 +108,7 @@ const saveTask = async () => {
     if (editingTask.value) {
       await apiClient.put(`/tasks/${editingTask.value.id}`, form.value)
     } else {
-      await apiClient.post('/tasks', form.value)
+      await apiClient.post('/tasks/', form.value)
     }
     await fetchTasks()
     cancelForm()
