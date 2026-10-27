@@ -75,17 +75,76 @@ class TestRulesEngine:
         assert engine.load_error is not None
         assert engine.validate("List all users", sample_context)["valid"] is False
 
-    def test_empty_rules_list_is_not_an_error(self, temp_dir, sample_context):
-        """An explicitly empty rule list loads cleanly (no load error)."""
-        rules_file = temp_dir / "empty_rules.yaml"
-        rules_file.write_text("rules: []\n")
+    @pytest.mark.parametrize(
+        "content",
+        ["rules: []\n", "rule:\n  - id: x\n    pattern: harm\n", "metadata: {}\n"],
+        ids=["empty-list", "rule-typo", "no-rules-key"],
+    )
+    def test_missing_or_empty_rules_fails_closed(
+        self, temp_dir, sample_context, content
+    ):
+        """A missing or empty rule list must not turn into allow-all."""
+        rules_file = temp_dir / "no_rules.yaml"
+        rules_file.write_text(content)
 
         engine = RulesEngine(str(rules_file))
         result = engine.validate("List all users", sample_context)
 
-        assert engine.load_error is None
+        assert engine.load_error is not None
         assert engine.rules == []
-        assert result["valid"] is True
+        assert result["valid"] is False
+        assert result["violations"][0]["rule_id"] == "constitution-unavailable"
+
+    @pytest.mark.parametrize(
+        "rules_yaml",
+        [
+            '  - pattern: "harm"\n',
+            '  - id: ""\n    pattern: "harm"\n',
+            '  - id: 42\n    pattern: "harm"\n',
+            '  - id: dup\n    pattern: "a"\n  - id: dup\n    pattern: "b"\n',
+        ],
+        ids=["missing-id", "empty-id", "non-string-id", "duplicate-id"],
+    )
+    def test_bad_rule_id_fails_closed(self, temp_dir, sample_context, rules_yaml):
+        """Every rule needs a unique, non-empty string id."""
+        rules_file = temp_dir / "bad_id.yaml"
+        rules_file.write_text("rules:\n" + rules_yaml)
+
+        engine = RulesEngine(str(rules_file))
+
+        assert engine.load_error is not None
+        for operation in ("harm users", "List all users"):
+            result = engine.validate(operation, sample_context)
+            assert result["valid"] is False
+            assert result["violations"][0]["rule_id"] == "constitution-unavailable"
+
+    def test_unavailable_description_hides_details(self, temp_dir, sample_context):
+        """The violation description is generic: no path, no exception text."""
+        rules_file = temp_dir / "secret_dir" / "bad.yaml"
+        rules_file.parent.mkdir()
+        rules_file.write_text(
+            'rules:\n  - id: leaky-rule\n    pattern: "harm|("\n    action: BLOCK\n'
+        )
+
+        engine = RulesEngine(str(rules_file))
+        description = engine.validate("harm", sample_context)["violations"][0][
+            "description"
+        ]
+
+        assert "leaky-rule" in engine.load_error
+        assert description == "Governance constitution unavailable; operation blocked"
+        assert str(rules_file) not in description
+        assert "secret_dir" not in description
+        assert "leaky-rule" not in description
+        assert "missing )" not in description
+
+        missing = RulesEngine(str(temp_dir / "secret_dir" / "missing.yaml"))
+        description = missing.validate("x", sample_context)["violations"][0][
+            "description"
+        ]
+        assert "missing.yaml" in missing.load_error
+        assert "missing.yaml" not in description
+        assert "not found" not in description
 
     @pytest.mark.parametrize("action", ["BLOCK", "REQUIRE_APPROVAL"])
     def test_invalid_regex_fails_closed(self, temp_dir, sample_context, action):
@@ -204,7 +263,7 @@ class TestRulesEngine:
         engine = RulesEngine(str(rules_file))
         assert engine.load_error is not None
 
-        rules_file.write_text("rules: []\n")
+        rules_file.write_text('rules:\n  - id: only-rule\n    pattern: "harm"\n')
         engine.reload_constitution()
 
         assert engine.load_error is None

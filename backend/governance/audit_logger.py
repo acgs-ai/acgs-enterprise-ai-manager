@@ -6,12 +6,17 @@ Implements cryptographic audit trails for governance decisions.
 import json
 import logging
 import hashlib
+import re
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 from pathlib import Path
 import os
 
 logger = logging.getLogger(__name__)
+
+# Only daily chain files take part in the hash chain; anything else in the
+# directory (e.g. a planted "audit_zzz.jsonl") is ignored.
+AUDIT_FILE_RE = re.compile(r"^audit_\d{4}-\d{2}-\d{2}\.jsonl$")
 
 
 class AuditLogger:
@@ -50,25 +55,41 @@ class AuditLogger:
         date_str = datetime.utcnow().strftime("%Y-%m-%d")
         return self.audit_dir / f"audit_{date_str}.jsonl"
 
+    def _chain_files(self) -> List[Path]:
+        """Daily chain files (audit_YYYY-MM-DD.jsonl), oldest first."""
+        return sorted(
+            p for p in self.audit_dir.iterdir() if AUDIT_FILE_RE.match(p.name)
+        )
+
     def _get_last_hash(self) -> str:
         """
         Get hash of last audit entry for chain integrity.
 
-        Seeds from the newest existing log file (not only today's), so the
-        chain continues across day boundaries the same way
-        verify_chain_integrity() walks it.
+        Seeds from the newest valid entry across the daily chain files (not
+        only today's), so the chain continues across day boundaries the same
+        way verify_chain_integrity() walks it. Corrupt or empty trailing lines
+        are skipped in favour of the previous valid entry.
         """
-        log_files = sorted(self.audit_dir.glob("audit_*.jsonl"))
-
-        try:
-            for log_file in reversed(log_files):
+        for log_file in reversed(self._chain_files()):
+            try:
                 with open(log_file, "r") as f:
-                    lines = [line for line in f.read().splitlines() if line.strip()]
-                if lines:
-                    last_entry = json.loads(lines[-1])
-                    return last_entry.get("entry_hash", "GENESIS")
-        except Exception as e:
-            logger.error(f"Error reading last hash: {e}")
+                    lines = f.read().splitlines()
+            except OSError as e:
+                logger.error(f"Error reading last hash from {log_file}: {e}")
+                continue
+            for line in reversed(lines):
+                try:
+                    entry = json.loads(line)
+                except ValueError:
+                    if line.strip():
+                        logger.error(f"Skipping corrupt audit line in {log_file}")
+                    continue
+                entry_hash = (
+                    entry.get("entry_hash") if isinstance(entry, dict) else None
+                )
+                if isinstance(entry_hash, str) and entry_hash:
+                    return entry_hash
+                logger.error(f"Skipping audit entry without hash in {log_file}")
 
         return "GENESIS"
 
@@ -268,7 +289,7 @@ class AuditLogger:
         results = []
 
         # Get all log files in date range
-        log_files = sorted(self.audit_dir.glob("audit_*.jsonl"))
+        log_files = self._chain_files()
 
         for log_file in log_files:
             try:
@@ -315,13 +336,29 @@ class AuditLogger:
         total_entries = 0
         previous_hash = "GENESIS"
 
-        log_files = sorted(self.audit_dir.glob("audit_*.jsonl"))
+        log_files = self._chain_files()
 
         for log_file in log_files:
             try:
                 with open(log_file, "r") as f:
                     for line_num, line in enumerate(f, 1):
-                        entry = json.loads(line)
+                        # A malformed line is a broken link; keep walking so
+                        # later entries are still verified against the last
+                        # valid hash (as _get_last_hash() seeds from it).
+                        try:
+                            entry = json.loads(line)
+                            if not isinstance(entry, dict):
+                                raise ValueError("entry is not a JSON object")
+                        except ValueError as e:
+                            broken_links.append(
+                                {
+                                    "file": str(log_file),
+                                    "line": line_num,
+                                    "type": "malformed",
+                                    "error": str(e),
+                                }
+                            )
+                            continue
                         total_entries += 1
 
                         # Verify previous hash matches

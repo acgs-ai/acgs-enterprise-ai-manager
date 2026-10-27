@@ -11,11 +11,21 @@ from datetime import datetime
 
 
 @pytest.fixture(autouse=True)
-def isolated_audit_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Route default AuditLogger output to a per-test directory, never the source tree."""
+def isolated_audit_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> Generator[Path, None, None]:
+    """Route default AuditLogger output to a per-test directory, never the source tree.
+
+    Also clears the get_governance() singleton so no test reuses an instance
+    (and audit dir) created by another test; monkeypatch restores it afterwards.
+    """
+    import backend.governance.acgs_integration as acgs_integration
+
     audit_dir = tmp_path / "audit_logs"
     monkeypatch.setenv("ACGS_AUDIT_DIR", str(audit_dir))
-    return audit_dir
+    monkeypatch.setattr(acgs_integration, "_governance_instance", None)
+    yield audit_dir
+    acgs_integration._governance_instance = None
 
 
 @pytest.fixture

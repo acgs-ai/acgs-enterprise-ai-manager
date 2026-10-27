@@ -240,6 +240,30 @@ class TestACGSIntegration:
         )
         assert integration.enforce_decision(result, "harm users") is False
 
+    def test_unavailable_violation_does_not_leak_path(self, temp_dir):
+        """The violation that reaches 403 bodies carries no path or error text."""
+        missing = temp_dir / "private_location" / "nonexistent.yaml"
+        integration = ACGSIntegration(constitution_path=str(missing))
+
+        result = integration.validate_operation(
+            operation="List all users", context={}, agent_id="test_agent"
+        )
+
+        violation = next(
+            v
+            for v in result["violations"]
+            if v["rule_id"] == "constitution-unavailable"
+        )
+        assert "private_location" not in violation["description"]
+        assert "nonexistent.yaml" not in violation["description"]
+        assert "not found" not in violation["description"]
+
+    def test_singleton_uses_per_test_audit_dir(self, isolated_audit_dir):
+        """get_governance() is reset per test, so it logs to this test's dir."""
+        instance = get_governance()
+
+        assert instance.audit_logger.audit_dir == isolated_audit_dir
+
     def test_audit_dir_passed_through(self, sample_governance_rules, temp_dir):
         """audit_dir argument is passed to the AuditLogger."""
         audit_dir = temp_dir / "custom_audit"

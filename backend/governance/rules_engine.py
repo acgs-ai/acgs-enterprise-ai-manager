@@ -49,9 +49,28 @@ class RulesEngine:
             if not isinstance(constitution, dict):
                 raise TypeError("constitution must be a YAML mapping")
 
-            rules = constitution.get("rules", [])
+            # A missing or empty rule list (e.g. a "rule:" typo) must not
+            # become allow-all; treat it as an untrusted constitution.
+            if "rules" not in constitution:
+                raise ValueError("constitution is missing 'rules'")
+            rules = constitution["rules"]
             if not isinstance(rules, list):
                 raise TypeError("constitution 'rules' must be a list")
+            if not rules:
+                raise ValueError("constitution 'rules' is empty")
+
+            # Every rule needs a unique, non-empty string id; validate()
+            # reports matches by id.
+            seen_ids = set()
+            for index, rule in enumerate(rules):
+                if not isinstance(rule, dict):
+                    raise TypeError(f"rule at index {index} must be a mapping")
+                rule_id = rule.get("id")
+                if not isinstance(rule_id, str) or not rule_id.strip():
+                    raise ValueError(f"rule at index {index} has no valid 'id'")
+                if rule_id in seen_ids:
+                    raise ValueError(f"duplicate rule id {rule_id!r}")
+                seen_ids.add(rule_id)
 
             self.rules = rules
             self.enforcement_config = constitution.get("enforcement", {})
@@ -119,7 +138,11 @@ class RulesEngine:
                     {
                         "rule_id": "constitution-unavailable",
                         "severity": "CRITICAL",
-                        "description": self.load_error,
+                        # Generic on purpose: this reaches API 403 bodies.
+                        # Details stay in load_error and the log.
+                        "description": (
+                            "Governance constitution unavailable; operation blocked"
+                        ),
                         "action": "BLOCK",
                     }
                 ],

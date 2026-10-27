@@ -15,7 +15,7 @@ This directory contains the integration of the ACGS-Lite constitutional governan
 
 2. **rules_engine.py** - Rule-based validation engine
    - Pattern matching against constitutional rules
-   - Severity-based action enforcement (BLOCK, REQUIRE_APPROVAL, VALIDATE, AUDIT)
+   - Severity-based action enforcement (BLOCK, REQUIRE_APPROVAL, VALIDATE; AUDIT and PROTECT record only)
    - Context-aware validation (confidence thresholds, amount limits, batch sizes)
 
 3. **audit_logger.py** - Tamper-evident audit trail
@@ -53,9 +53,9 @@ This directory contains the integration of the ACGS-Lite constitutional governan
 ## Key Features
 
 ### Fail-Closed Enforcement
-- Operations are blocked by default on rule violations
-- Explicit allow required for operations to proceed
-- Graceful degradation on system errors (fails to safe state)
+- Operations are blocked on BLOCK-rule violations; unmatched operations are allowed
+  (default-deny is a tracked follow-up, see Enforcement Configuration)
+- Errors fail closed: a constitution load failure or governance error blocks
 
 ### Tamper-Evident Audit Trail
 - Each audit entry includes SHA-256 hash of previous entry
@@ -186,19 +186,46 @@ rules:
   - id: custom-rule
     pattern: "regex pattern"
     severity: CRITICAL|HIGH|MEDIUM|LOW
-    action: BLOCK|REQUIRE_APPROVAL|VALIDATE|AUDIT
+    action: BLOCK|REQUIRE_APPROVAL|VALIDATE|AUDIT|PROTECT
     description: "Rule description"
     maci_phase: MONITOR|APPROVE|CONTROL|INSPECT
 ```
 
+Action semantics (current behaviour):
+
+- `BLOCK` (also the default when `action` is omitted): a match blocks the operation.
+- `REQUIRE_APPROVAL`: a match holds the operation for human approval.
+- `VALIDATE`: a match blocks only if the rule's `validation` checks fail.
+- `AUDIT` and `PROTECT`: a match is recorded in `matched_rules` (and the audit
+  trail) but does **not** block the operation.
+
+The constitution fails to load if any of these hold. A load failure sets
+`load_error`, and every operation is then blocked with a
+`constitution-unavailable` violation whose description is generic (the path and
+error details go to `load_error` and the log, never to API responses):
+
+- the file is missing, unreadable, not valid YAML, or not a mapping
+- `rules` is missing, not a list, or an empty list (a `rule:` typo does not
+  become allow-all)
+- a rule is not a mapping, or lacks a non-empty string `id`, or reuses an `id`
+- a rule has an unknown `action` (e.g. `BLOK`)
+- a rule's `pattern` or `context_pattern` is not a valid regex
+
 ### Enforcement Configuration
+
+Mirrors `config/governance_rules.yaml`:
 
 ```yaml
 enforcement:
-  default_action: BLOCK
+  default_action: ALLOW
   fail_mode: CLOSED
-  require_explicit_allow: true
+  require_explicit_allow: false
 ```
+
+Operations that match no rule are **allowed**. Errors fail closed: a constitution
+load failure or a governance exception blocks the operation. Default-deny
+(`default_action: BLOCK` / `require_explicit_allow: true`) is a tracked
+follow-up and is not implemented yet.
 
 ### Audit Configuration
 
