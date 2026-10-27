@@ -50,12 +50,32 @@ Authorization: Bearer <access token from your IdP>
 
 See `.env.example`.
 
+### Roles
+
+Every `/api/v1` route has an explicit minimum role in `backend/auth/policy.py`
+(`ROUTE_POLICY`). A higher role can do everything a lower one can. A route with
+no entry is refused for everyone, and CI fails if any route lacks an entry.
+The policy is checked before governance, so a refused request never creates a
+governance decision or approval request. Any `/api/v1` request that matches no
+route (unknown path, or a method the path does not support, including `HEAD`)
+is refused with 403 rather than 404/405.
+
+| Minimum role | Routes |
+|---|---|
+| `viewer` | Every `GET`, including financial reads, reports, search, and recommendations `domains`, `health`, `stats`, `top/{domain}` |
+| `user` | `POST`/`PUT` on tasks, projects, assets, infrastructure and documents (`/`, `/{id}`); `POST /tasks/{task_id}/assets`, `POST /tasks/{task_id}/infrastructure`; `POST /recommendations/generate`, `POST /recommendations/batch` |
+| `manager` | Every `DELETE`; `POST /financial/`, `PUT /financial/{record_id}`; `POST /financial/{record_id}/approve`, `POST /financial/{record_id}/reject` |
+| `admin` | `POST /search/reindex` |
+
+Paths are relative to `/api/v1`.
+
 ### Error responses
 
 | Status | Body | When |
 |---|---|---|
 | 401 | `{"detail": "Could not validate credentials"}` + `WWW-Authenticate: Bearer` | Missing, malformed, expired or otherwise invalid token |
-| 403 | `{"detail": "Insufficient permissions. Required role: ..."}` | Valid token, role too low |
+| 403 | `{"detail": "Insufficient permissions"}` | Valid token, role below the route's minimum |
+| 403 | `{"detail": "Forbidden"}` | `/api/v1` request matching no route, or a route with no policy entry (fails closed for every role) |
 | 503 | `{"detail": "Authentication not configured"}` | Required `AUTH_*` settings missing or unsafe |
 | 503 | `{"detail": "Authentication service unavailable"}` | JWKS endpoint unreachable or timed out |
 

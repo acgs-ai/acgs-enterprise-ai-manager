@@ -14,7 +14,9 @@ from typing import Optional
 from backend.database import init_db, close_db
 from backend.middleware.governance_interceptor import GovernanceMiddleware
 from backend.middleware.auth import AuthMiddleware, api_docs_enabled, public_paths
+from backend.middleware.rbac import RBACMiddleware
 from backend.auth.dependencies import get_current_user
+from backend.auth.policy import enforce_route_policy
 
 # Import API routers
 from backend.api import (
@@ -34,6 +36,10 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+# Dependencies for every /api/v1 router, in order: authenticate, then authorize
+# against backend.auth.policy.ROUTE_POLICY.
+API_AUTH_DEPENDENCIES = [Depends(get_current_user), Depends(enforce_route_policy)]
 
 
 @asynccontextmanager
@@ -100,13 +106,17 @@ def create_app(docs_enabled: Optional[bool] = None) -> FastAPI:
     )
 
     # Middleware order: Starlette runs the LAST-added middleware FIRST (outermost).
-    # Resulting request flow: timing -> CORS -> Auth -> Governance -> routes.
+    # Resulting request flow: timing -> CORS -> Auth -> RBAC -> Governance -> routes.
     # Auth sits inside CORS so 401s carry CORS headers, and outside Governance so
-    # unauthenticated requests never reach governance validation.
-    # tests/integration/test_api_auth.py asserts this order.
+    # unauthenticated requests never reach governance validation. RBAC sits
+    # between them so requests the role policy refuses never reach governance.
+    # tests/integration/test_api_auth.py and test_api_rbac.py assert this order.
 
     # Add governance interceptor middleware (innermost)
     app.add_middleware(GovernanceMiddleware)
+
+    # Role policy (backend.auth.policy) for /api/v1, before governance
+    app.add_middleware(RBACMiddleware)
 
     # Authentication: default-deny except the exact public allowlist
     app.add_middleware(AuthMiddleware, public_paths=public_paths(docs_enabled))
@@ -145,9 +155,9 @@ def create_app(docs_enabled: Optional[bool] = None) -> FastAPI:
             info["docs"] = "/docs"
         return info
 
-    # Register API routers. Every /api/v1 router also depends on get_current_user
-    # (defence in depth on top of AuthMiddleware).
-    _auth = [Depends(get_current_user)]
+    # Register API routers. Every /api/v1 router depends on get_current_user
+    # (defence in depth on top of AuthMiddleware) and enforce_route_policy.
+    _auth = API_AUTH_DEPENDENCIES
     app.include_router(
         tasks.router, prefix="/api/v1/tasks", tags=["Tasks"], dependencies=_auth
     )

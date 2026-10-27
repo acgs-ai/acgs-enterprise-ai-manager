@@ -346,7 +346,7 @@ def require_role(required_role: str):
         if ROLE_HIERARCHY[user_role] < ROLE_HIERARCHY[required_role]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Insufficient permissions. Required role: {required_role}",
+                detail="Insufficient permissions",
             )
         return user
 
