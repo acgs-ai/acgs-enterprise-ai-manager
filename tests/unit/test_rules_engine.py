@@ -124,6 +124,64 @@ class TestRulesEngine:
         assert engine.load_error is not None
         assert engine.validate("List all users", sample_context)["valid"] is False
 
+    def test_unknown_action_fails_closed(self, temp_dir, sample_context):
+        """A rule with an unknown action (typo) makes the constitution untrusted."""
+        rules_file = temp_dir / "typo_action.yaml"
+        rules_file.write_text(
+            "rules:\n"
+            "  - id: typo-rule\n"
+            '    pattern: "harm"\n'
+            "    action: BLOK\n"
+        )
+
+        engine = RulesEngine(str(rules_file))
+
+        assert engine.load_error is not None
+        assert "BLOK" in engine.load_error
+        for operation in ("harm users", "List all users"):
+            result = engine.validate(operation, sample_context)
+            assert result["valid"] is False
+            assert result["violations"][0]["rule_id"] == "constitution-unavailable"
+
+    @pytest.mark.parametrize(
+        "action", ["BLOCK", "REQUIRE_APPROVAL", "VALIDATE", "AUDIT", "PROTECT"]
+    )
+    def test_known_actions_load(self, temp_dir, action):
+        """Each known action loads without a load error."""
+        rules_file = temp_dir / "known_action.yaml"
+        rules_file.write_text(
+            "rules:\n"
+            "  - id: known-rule\n"
+            '    pattern: "example"\n'
+            f"    action: {action}\n"
+        )
+
+        engine = RulesEngine(str(rules_file))
+
+        assert engine.load_error is None
+        assert len(engine.rules) == 1
+
+    def test_missing_action_defaults_to_block(self, temp_dir, sample_context):
+        """A rule without an action still loads and blocks on match."""
+        rules_file = temp_dir / "no_action.yaml"
+        rules_file.write_text('rules:\n  - id: no-action\n    pattern: "harm"\n')
+
+        engine = RulesEngine(str(rules_file))
+
+        assert engine.load_error is None
+        assert engine.validate("harm users", sample_context)["valid"] is False
+
+    def test_production_constitution_loads(self):
+        """The shipped config loads cleanly (all actions known, all regexes valid)."""
+        config = (
+            Path(__file__).resolve().parents[2] / "config" / "governance_rules.yaml"
+        )
+
+        engine = RulesEngine(str(config))
+
+        assert engine.load_error is None
+        assert len(engine.rules) == 15
+
     def test_unmatched_operation_allowed_by_default(
         self, sample_governance_rules, sample_context
     ):

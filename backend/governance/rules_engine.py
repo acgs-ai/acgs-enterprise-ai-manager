@@ -11,6 +11,9 @@ import yaml
 
 logger = logging.getLogger(__name__)
 
+# Rule actions the engine accepts (case-sensitive, as validate() compares them).
+KNOWN_ACTIONS = frozenset({"BLOCK", "REQUIRE_APPROVAL", "VALIDATE", "AUDIT", "PROTECT"})
+
 
 class RulesEngine:
     """
@@ -58,6 +61,14 @@ class RulesEngine:
             # constitution untrusted (fail closed via load_error), rather than
             # silently disabling the rule.
             for rule in self.rules:
+                # Unknown actions (e.g. a "BLOK" typo) would otherwise match
+                # without adding a violation and silently allow. Missing
+                # action still defaults to BLOCK in validate().
+                action = rule.get("action", "BLOCK")
+                if action not in KNOWN_ACTIONS:
+                    raise ValueError(
+                        f"Unknown action {action!r} in rule {rule.get('id')}"
+                    )
                 try:
                     if "pattern" in rule:
                         rule["_compiled_pattern"] = re.compile(
