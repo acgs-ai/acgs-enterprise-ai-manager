@@ -242,12 +242,6 @@ class TestList:
         out, _ = await InfrastructureService.list_infrastructure(db)
         assert isinstance(out, list)
 
-    @pytest.mark.xfail(
-        strict=True,
-        raises=AssertionError,
-        reason="BUG: backend/schemas/infrastructure.py:80 documents search as 'name and "
-        "configuration' but backend/services/infrastructure_service.py:56-58 only matches name",
-    )
     async def test_search_also_matches_configuration(self, db):
         db.execute.side_effect = [_result(scalar=0), _result()]
         await InfrastructureService.list_infrastructure(
