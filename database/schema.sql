@@ -439,8 +439,14 @@ CREATE TRIGGER update_reports_updated_at BEFORE UPDATE ON reports
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Function to update search index when entities change
+-- Reads the row via to_jsonb(NEW): tables differ in title/name/content/tags
+-- columns, and NEW.<missing column> is an error in PL/pgSQL (migration 003).
 CREATE OR REPLACE FUNCTION update_search_index()
 RETURNS TRIGGER AS $$
+DECLARE
+    row_data JSONB := to_jsonb(NEW);
+    entry_title TEXT := COALESCE(row_data->>'title', row_data->>'name', '');
+    entry_content TEXT := COALESCE(row_data->>'description', row_data->>'content', '');
 BEGIN
     INSERT INTO search_index (entity_type, entity_id, domain, title, content, tags, search_vector)
     VALUES (
@@ -454,10 +460,11 @@ BEGIN
             WHEN 'financial_records' THEN 'financial'
             WHEN 'documents' THEN 'documents'
         END,
-        COALESCE(NEW.title, NEW.name, ''),
-        COALESCE(NEW.description, NEW.content, ''),
-        COALESCE(NEW.tags, '[]'::jsonb),
-        to_tsvector('english', COALESCE(NEW.title, NEW.name, '') || ' ' || COALESCE(NEW.description, NEW.content, ''))
+        entry_title,
+        entry_content,
+        CASE WHEN jsonb_typeof(row_data->'tags') = 'array'
+             THEN row_data->'tags' ELSE '[]'::jsonb END,
+        to_tsvector('english', entry_title || ' ' || entry_content)
     )
     ON CONFLICT (entity_type, entity_id)
     DO UPDATE SET
