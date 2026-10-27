@@ -86,7 +86,12 @@ old claims until they expire):
      `AUTH_JWT_AUDIENCE` and the key settings, not the role.
 
 The same checks run locally without an IdP in
-`tests/integration/test_api_role_boundary.py`.
+`tests/integration/test_api_role_boundary.py` (fake database, checks what is
+committed) and, against a real PostgreSQL, in
+`tests/integration/test_api_role_persistence_pg.py`. The latter is skipped
+unless `ACGS_TEST_DATABASE_URL` is set (e.g.
+`postgresql://postgres:postgres@localhost:5432/postgres`); it creates and drops
+its own uniquely named database, so the role needs `CREATEDB`; PostgreSQL 13+.
 
 ### Configuration
 
