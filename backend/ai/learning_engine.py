@@ -235,9 +235,7 @@ class LearningEngine:
             "trend": (
                 "improving"
                 if improvement and improvement > 0
-                else "stable"
-                if improvement == 0
-                else "declining"
+                else "stable" if improvement == 0 else "declining"
             ),
             "window_size": window_size,
         }
