@@ -182,12 +182,6 @@ class TestTaskServiceCrud:
         await TaskService.update_task(mock_db, uuid4(), TaskUpdate(status="review"))
         assert t.completed_at is None
 
-    @pytest.mark.xfail(
-        strict=True,
-        raises=AssertionError,
-        reason="BUG: task_service.py update_task never clears completed_at when a "
-        "done task is reopened (status moves away from 'done')",
-    )
     @pytest.mark.asyncio
     async def test_reopening_done_task_clears_completed_at(self, mock_db):
         t = Task(title="T", status="done", completed_at=datetime(2020, 1, 1))
