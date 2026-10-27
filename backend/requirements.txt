@@ -15,8 +15,8 @@ redis==5.0.1
 hiredis==2.3.2
 
 # Authentication
-python-jose[cryptography]==3.4.0
-passlib[bcrypt]==1.7.4
+# JWT verification only (tokens come from an external IdP)
+PyJWT[crypto]==2.15.1
 
 # Validation
 pydantic==2.5.3

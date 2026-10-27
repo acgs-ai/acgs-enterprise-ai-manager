@@ -6,42 +6,58 @@ The ACGS Enterprise Manager API is a RESTful API built with FastAPI. All endpoin
 
 **Base URL**: `http://localhost:8000` (development)
 
-**API Documentation**: 
+**API Documentation** (only when `API_DOCS_ENABLED=true`, off by default):
 - Swagger UI: http://localhost:8000/docs
 - ReDoc: http://localhost:8000/redoc
+- OpenAPI schema: http://localhost:8000/openapi.json
 
 ## Authentication
 
-Most endpoints require authentication via JWT tokens.
+Every endpoint requires a bearer JWT except `/health` and `/` (exact paths
+only). When `API_DOCS_ENABLED=true`, `/docs`, `/docs/oauth2-redirect`, `/redoc`
+and `/openapi.json` are also served and public. When it is unset or false (the
+default), they are not served: they return 401 without a token and 404 with one.
+CORS preflight `OPTIONS` requests are also let through.
 
-### Login
-
-```http
-POST /api/auth/login
-Content-Type: application/json
-
-{
-  "email": "user@example.com",
-  "password": "password"
-}
-```
-
-**Response**:
-```json
-{
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "token_type": "bearer",
-  "expires_in": 3600
-}
-```
-
-### Using Authentication
-
-Include the token in the Authorization header:
+Tokens are issued by an **external identity provider**. This API only
+verifies them; it has no login endpoint and does not mint tokens. Obtain a
+token from your IdP and send it on every request:
 
 ```http
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+Authorization: Bearer <access token from your IdP>
 ```
+
+### Token requirements
+
+- Signed with an algorithm in `AUTH_JWT_ALGORITHMS` (default `RS256`; `none` is rejected).
+- Claims `exp`, `iat`, `sub`, `iss` and `aud` are required. `iss` must equal
+  `AUTH_JWT_ISSUER` and `aud` must contain `AUTH_JWT_AUDIENCE`. 30 seconds of
+  clock skew is tolerated.
+- The role is read from the `AUTH_ROLE_CLAIM` claim (default `role`). Roles rank
+  `admin > manager > user > viewer`. A missing or unknown role is treated as `viewer`.
+
+### Configuration
+
+| Variable | Required | Meaning |
+|---|---|---|
+| `AUTH_JWT_ISSUER` | yes | Expected `iss` |
+| `AUTH_JWT_AUDIENCE` | yes | Expected `aud` |
+| `AUTH_JWT_ALGORITHMS` | no | Comma list, default `RS256`. HS* cannot be mixed with asymmetric algorithms |
+| `AUTH_JWKS_URL` | one of | IdP JWKS endpoint (https). Key set cached 5 min, 5 s fetch timeout. A token with an unknown `kid` forces at most one refetch per 60 s process-wide; other unknown kids in that window get 401 without a fetch |
+| `AUTH_JWT_KEY` | one of | PEM public key (RS*/PS*/ES*/EdDSA) or shared secret of 32+ bytes (HS*) |
+| `AUTH_ROLE_CLAIM` | no | Role claim name, default `role` |
+| `API_DOCS_ENABLED` | no | `true`/`1`/`yes`/`on` serves `/docs`, `/redoc` and `/openapi.json` publicly. Default false: not served. Read at app startup |
+
+See `.env.example`.
+
+### Error responses
+
+| Status | Body | When |
+|---|---|---|
+| 401 | `{"detail": "Could not validate credentials"}` + `WWW-Authenticate: Bearer` | Missing, malformed, expired or otherwise invalid token |
+| 403 | `{"detail": "Insufficient permissions. Required role: ..."}` | Valid token, role too low |
+| 503 | `{"detail": "Authentication not configured"}` | Required `AUTH_*` settings missing or unsafe |
+| 503 | `{"detail": "Authentication service unavailable"}` | JWKS endpoint unreachable or timed out |
 
 ## Core Domain APIs
 
