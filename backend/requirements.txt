@@ -1,9 +1,9 @@
 # ACGS Enterprise Manager - Backend Dependencies
 
 # FastAPI and web framework
-fastapi==0.109.0
+fastapi==0.109.1
 uvicorn[standard]==0.27.0
-python-multipart==0.0.20
+python-multipart==0.0.31
 
 # Database
 sqlalchemy[asyncio]==2.0.25
@@ -27,7 +27,7 @@ email-validator==2.1.0
 acgs-lite==2.9.0
 
 # Utilities
-python-dotenv==1.0.0
+python-dotenv==1.2.2
 pyyaml==6.0.1
 
 # Development

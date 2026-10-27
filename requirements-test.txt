@@ -22,7 +22,7 @@ sqlalchemy==2.0.36
 
 # API testing
 httpx==0.25.2  # Async HTTP client for FastAPI testing
-fastapi==0.104.1
+fastapi==0.109.1
 uvicorn==0.24.0
 
 # Linting and formatting (for CI)
@@ -35,8 +35,8 @@ isort==5.13.2
 pyyaml==6.0.2
 
 # Runtime imports used by backend/ (not in requirements.txt)
-python-dotenv==1.0.0
+python-dotenv==1.2.2
 python-jose[cryptography]==3.4.0
 passlib==1.7.4
 email-validator==2.1.0
-python-multipart==0.0.20
+python-multipart==0.0.31
