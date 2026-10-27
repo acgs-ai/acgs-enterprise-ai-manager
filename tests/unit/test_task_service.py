@@ -184,6 +184,7 @@ class TestTaskServiceCrud:
 
     @pytest.mark.xfail(
         strict=True,
+        raises=AssertionError,
         reason="BUG: task_service.py update_task never clears completed_at when a "
         "done task is reopened (status moves away from 'done')",
     )

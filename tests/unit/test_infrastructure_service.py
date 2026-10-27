@@ -244,6 +244,7 @@ class TestList:
 
     @pytest.mark.xfail(
         strict=True,
+        raises=AssertionError,
         reason="BUG: backend/schemas/infrastructure.py:80 documents search as 'name and "
         "configuration' but backend/services/infrastructure_service.py:56-58 only matches name",
     )

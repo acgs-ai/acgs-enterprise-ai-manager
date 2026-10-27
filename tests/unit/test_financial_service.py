@@ -96,6 +96,7 @@ class TestSchemas:
 
     @pytest.mark.xfail(
         strict=True,
+        raises=pytest.fail.Exception,
         reason="BUG: backend/schemas/financial_record.py:23 amount has no ge=0 constraint; "
         "negative amounts accepted (FinancialRecordFilter.min_amount/max_amount do enforce ge=0)",
     )
