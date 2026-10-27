@@ -9,10 +9,12 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 from datetime import datetime
 import logging
+import uuid
 
 from backend.database import get_db
 from backend.ai.recommendation_engine import RecommendationEngine, RecommendationDomain
 from backend.governance.acgs_integration import get_governance
+from backend.models.recommendation import Recommendation
 
 logger = logging.getLogger(__name__)
 
@@ -99,12 +101,44 @@ async def generate_recommendation(
             domain=domain, entity_id=request.entity_id, context=request.context
         )
 
-        # TODO: Store recommendation in database once schema is ready
-        # For now, return the generated recommendation
-        logger.info(f"Generated recommendation for {domain}:{request.entity_id}")
+        # Governance block: never persist, never expose violation details
+        if recommendation.get("status") == "blocked":
+            logger.warning(
+                f"Recommendation for {domain.value}:{request.entity_id} blocked by governance"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Recommendation blocked by governance policy",
+            )
 
-        return RecommendationResponse(**recommendation)
+        generated_at = recommendation.get("generated_at")
+        row = Recommendation(
+            id=uuid.uuid4(),
+            domain=domain.value,
+            entity_type=domain.value,
+            entity_id=request.entity_id,
+            suggestion=recommendation["suggestion"],
+            confidence=round(float(recommendation["confidence"]), 2),
+            rationale=recommendation.get("rationale"),
+            status=recommendation["status"],
+            recommendation_metadata=recommendation.get("metadata") or {},
+            governance_check=recommendation.get("governance_check"),
+            generated_at=datetime.fromisoformat(generated_at) if generated_at else None,
+        )
+        try:
+            db.add(row)
+            await db.commit()
+            await db.refresh(row)
+        except Exception:
+            await db.rollback()
+            raise
 
+        logger.info(f"Stored recommendation {row.id} for {domain.value}:{request.entity_id}")
+
+        return RecommendationResponse(**{**recommendation, "id": str(row.id)})
+
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:

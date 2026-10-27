@@ -10,6 +10,7 @@ from backend.models.task import Task
 from backend.models.asset import ITAsset
 from backend.models.infrastructure import Infrastructure
 from backend.models.search_index import SearchIndex
+from backend.models.recommendation import Recommendation
 
 __all__ = [
     "Base",
@@ -19,4 +20,5 @@ __all__ = [
     "ITAsset",
     "Infrastructure",
     "SearchIndex",
+    "Recommendation",
 ]
