@@ -87,6 +87,43 @@ class TestRulesEngine:
         assert engine.rules == []
         assert result["valid"] is True
 
+    @pytest.mark.parametrize("action", ["BLOCK", "REQUIRE_APPROVAL"])
+    def test_invalid_regex_fails_closed(self, temp_dir, sample_context, action):
+        """A rule whose pattern does not compile must not silently disable itself."""
+        rules_file = temp_dir / "bad_regex.yaml"
+        rules_file.write_text(
+            "rules:\n"
+            "  - id: bad-rule\n"
+            '    pattern: "harm|("\n'
+            f"    action: {action}\n"
+            "    severity: CRITICAL\n"
+        )
+
+        engine = RulesEngine(str(rules_file))
+
+        assert engine.load_error is not None
+        assert "bad-rule" in engine.load_error
+        for operation in ("harm users", "List all users"):
+            result = engine.validate(operation, sample_context)
+            assert result["valid"] is False
+            assert result["violations"][0]["rule_id"] == "constitution-unavailable"
+
+    def test_invalid_context_pattern_fails_closed(self, temp_dir, sample_context):
+        """An invalid context_pattern is also a load error, not a skipped rule."""
+        rules_file = temp_dir / "bad_ctx.yaml"
+        rules_file.write_text(
+            "rules:\n"
+            "  - id: bad-ctx\n"
+            "    context_key: user_id\n"
+            '    context_pattern: "test_("\n'
+            "    action: BLOCK\n"
+        )
+
+        engine = RulesEngine(str(rules_file))
+
+        assert engine.load_error is not None
+        assert engine.validate("List all users", sample_context)["valid"] is False
+
     def test_unmatched_operation_allowed_by_default(
         self, sample_governance_rules, sample_context
     ):

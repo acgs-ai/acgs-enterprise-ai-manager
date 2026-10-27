@@ -54,16 +54,21 @@ class RulesEngine:
             self.enforcement_config = constitution.get("enforcement", {})
             self.audit_config = constitution.get("audit", {})
 
-            # Compile regex patterns for efficiency
+            # Compile regex patterns. An invalid regex makes the whole
+            # constitution untrusted (fail closed via load_error), rather than
+            # silently disabling the rule.
             for rule in self.rules:
-                if "pattern" in rule:
-                    try:
+                try:
+                    if "pattern" in rule:
                         rule["_compiled_pattern"] = re.compile(
                             rule["pattern"], re.IGNORECASE
                         )
-                    except re.error as e:
-                        logger.error(f"Invalid regex in rule {rule.get('id')}: {e}")
-                        rule["_compiled_pattern"] = None
+                    if rule.get("context_pattern"):
+                        re.compile(rule["context_pattern"], re.IGNORECASE)
+                except re.error as e:
+                    raise ValueError(
+                        f"Invalid regex in rule {rule.get('id')}: {e}"
+                    ) from e
 
             logger.info(f"Loaded {len(self.rules)} governance rules")
 
