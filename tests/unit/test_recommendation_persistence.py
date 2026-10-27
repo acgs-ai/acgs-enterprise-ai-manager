@@ -3,7 +3,10 @@ Unit tests for recommendation persistence in POST /generate.
 Uses a mocked AsyncSession and FastAPI dependency overrides (no Postgres).
 """
 
+import re
 import uuid
+from datetime import timedelta
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -134,3 +137,75 @@ def test_invalid_domain_still_400():
     resp = client.post("/recommendations/generate", json={**PAYLOAD, "domain": "nope"})
     assert resp.status_code == 400
     session.add.assert_not_called()
+
+
+@pytest.mark.unit
+def test_generated_at_is_server_utc_aware():
+    client, session = make_client("ALLOW")
+    resp = client.post("/recommendations/generate", json=PAYLOAD)
+    assert resp.status_code == 201
+    row = session.add.call_args.args[0]
+    assert row.generated_at.tzinfo is not None
+    assert row.generated_at.utcoffset() == timedelta(0)
+    assert resp.json()["generated_at"] == row.generated_at.isoformat()
+
+
+@pytest.mark.unit
+def test_bad_engine_generated_at_is_not_a_400():
+    class BadTimestampEngine(RecommendationEngine):
+        async def generate_recommendation(self, domain, entity_id, context=None):
+            return {
+                "domain": "tasks",
+                "entity_id": entity_id,
+                "suggestion": "s",
+                "confidence": 0.5,
+                "rationale": "r",
+                "status": "approved",
+                "metadata": {},
+                "generated_at": "not-a-timestamp",
+            }
+
+    session = make_session()
+    app = FastAPI()
+    app.include_router(api.router, prefix="/recommendations")
+    app.dependency_overrides[get_db] = lambda: session
+    app.dependency_overrides[api.get_recommendation_engine] = lambda: (
+        BadTimestampEngine(governance_integration=StubGovernance("ALLOW"))
+    )
+    client = TestClient(app, raise_server_exceptions=False)
+    resp = client.post("/recommendations/generate", json=PAYLOAD)
+    assert resp.status_code == 201
+
+
+@pytest.mark.unit
+def test_refresh_failure_after_commit_still_returns_201(caplog):
+    session = make_session()
+    session.refresh.side_effect = RuntimeError("refresh blew up")
+    client, _ = make_client("ALLOW", session)
+    with caplog.at_level("WARNING", logger=api.logger.name):
+        resp = client.post("/recommendations/generate", json=PAYLOAD)
+    assert resp.status_code == 201
+    row = session.add.call_args.args[0]
+    assert resp.json()["id"] == str(row.id)
+    session.commit.assert_awaited_once()
+    session.rollback.assert_not_awaited()
+    assert any("Refresh failed" in r.message for r in caplog.records)
+
+
+@pytest.mark.unit
+def test_model_columns_match_schema_sql():
+    schema = Path(__file__).resolve().parents[2] / "database" / "schema.sql"
+    sql = schema.read_text()
+    block = re.search(
+        r"CREATE TABLE recommendations \((.*?)\n\);", sql, re.DOTALL
+    ).group(1)
+    sql_columns = set()
+    for line in block.splitlines():
+        m = re.match(r"\s+([a-z_]+)\s+[A-Z]", line)
+        if m:
+            sql_columns.add(m.group(1))
+    model_columns = {
+        "metadata" if c.name == "recommendation_metadata" else c.name
+        for c in Recommendation.__table__.columns
+    }
+    assert sql_columns == model_columns

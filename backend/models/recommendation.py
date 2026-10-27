@@ -3,7 +3,15 @@ Recommendation Model
 SQLAlchemy model for persisted AI recommendations
 """
 
-from sqlalchemy import Column, String, DateTime, Text, Numeric, ForeignKey
+from sqlalchemy import (
+    Column,
+    String,
+    DateTime,
+    Text,
+    Numeric,
+    ForeignKey,
+    CheckConstraint,
+)
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from datetime import datetime
 import uuid
@@ -15,6 +23,19 @@ class Recommendation(Base):
     """AI-generated recommendation. Blocked recommendations are never stored."""
 
     __tablename__ = "recommendations"
+    # Mirrors the inline CHECKs in database/schema.sql (Postgres auto-names them
+    # <table>_<column>_check) and migration 002.
+    __table_args__ = (
+        CheckConstraint(
+            "confidence >= 0 AND confidence <= 1",
+            name="recommendations_confidence_check",
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'accepted', 'rejected', 'implemented', "
+            "'approved', 'pending_approval')",
+            name="recommendations_status_check",
+        ),
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     domain = Column(String(50), nullable=False)

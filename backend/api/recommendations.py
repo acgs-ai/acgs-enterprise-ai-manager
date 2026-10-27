@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 from pydantic import BaseModel, Field
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 import uuid
 
@@ -111,7 +111,9 @@ async def generate_recommendation(
                 detail="Recommendation blocked by governance policy",
             )
 
-        generated_at = recommendation.get("generated_at")
+        # Server-side value: always tz-aware UTC, so a bad engine value can
+        # never surface as a client-facing 400.
+        generated_at = datetime.now(timezone.utc)
         row = Recommendation(
             id=uuid.uuid4(),
             domain=domain.value,
@@ -123,21 +125,38 @@ async def generate_recommendation(
             status=recommendation["status"],
             recommendation_metadata=recommendation.get("metadata") or {},
             governance_check=recommendation.get("governance_check"),
-            generated_at=datetime.fromisoformat(generated_at) if generated_at else None,
+            generated_at=generated_at,
         )
+        # Capture the id up front so the response never depends on the row
+        # state after commit/refresh.
+        row_id = row.id
         try:
             db.add(row)
             await db.commit()
-            await db.refresh(row)
         except Exception:
             await db.rollback()
             raise
 
+        # The row is already committed: a refresh failure must not become a 500
+        # (or a rollback). Fall back to the values we already hold.
+        try:
+            await db.refresh(row)
+        except Exception as e:
+            logger.warning(
+                f"Refresh failed after committing recommendation {row_id}: {e}"
+            )
+
         logger.info(
-            f"Stored recommendation {row.id} for {domain.value}:{request.entity_id}"
+            f"Stored recommendation {row_id} for {domain.value}:{request.entity_id}"
         )
 
-        return RecommendationResponse(**{**recommendation, "id": str(row.id)})
+        return RecommendationResponse(
+            **{
+                **recommendation,
+                "id": str(row_id),
+                "generated_at": generated_at.isoformat(),
+            }
+        )
 
     except HTTPException:
         raise
