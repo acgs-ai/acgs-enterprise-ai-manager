@@ -277,6 +277,22 @@ class TestAuditLogger:
         assert second.last_hash == good_hash
         assert second.last_hash != "GENESIS"
 
+    def test_invalid_utf8_does_not_stop_logger_and_is_flagged(self, temp_dir):
+        """A stray invalid byte must not crash init, query or verification."""
+        audit_dir = temp_dir / "audit_logs"
+        first = AuditLogger(str(audit_dir))
+        good_hash = first.log_enforcement(operation="op", action="BLOCKED", reason="r")
+        with open(first.current_log_file, "ab") as f:
+            f.write(b"\xff\xfe not utf-8\n")
+
+        second = AuditLogger(str(audit_dir))
+
+        assert second.last_hash == good_hash
+        assert len(second.query_audit_trail(limit=10)) == 1
+        integrity = second.verify_chain_integrity()
+        assert integrity["valid"] is False
+        assert integrity["broken_links"]
+
     def test_corrupt_last_file_seeds_from_previous_file(self, temp_dir):
         """If the newest daily file has no valid entry, use the previous file."""
         audit_dir = temp_dir / "audit_logs"

@@ -72,7 +72,9 @@ class AuditLogger:
         """
         for log_file in reversed(self._chain_files()):
             try:
-                with open(log_file, "r") as f:
+                # errors="replace": a stray invalid byte must not stop the logger
+                # from starting; the damaged line fails JSON parsing below.
+                with open(log_file, "r", errors="replace") as f:
                     lines = f.read().splitlines()
             except OSError as e:
                 logger.error(f"Error reading last hash from {log_file}: {e}")
@@ -293,7 +295,7 @@ class AuditLogger:
 
         for log_file in log_files:
             try:
-                with open(log_file, "r") as f:
+                with open(log_file, "r", errors="replace") as f:
                     for line in f:
                         if len(results) >= limit:
                             break
@@ -340,7 +342,7 @@ class AuditLogger:
 
         for log_file in log_files:
             try:
-                with open(log_file, "r") as f:
+                with open(log_file, "r", errors="replace") as f:
                     for line_num, line in enumerate(f, 1):
                         # A malformed line is a broken link; keep walking so
                         # later entries are still verified against the last
