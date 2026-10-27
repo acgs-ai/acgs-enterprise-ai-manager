@@ -94,15 +94,11 @@ class TestSchemas:
     def test_string_date_coerced(self):
         assert _create(date="2026-03-04").date == date(2026, 3, 4)
 
-    @pytest.mark.xfail(
-        strict=True,
-        raises=pytest.fail.Exception,
-        reason="BUG: backend/schemas/financial_record.py:23 amount has no ge=0 constraint; "
-        "negative amounts accepted (FinancialRecordFilter.min_amount/max_amount do enforce ge=0)",
-    )
-    def test_negative_amount_rejected(self):
-        with pytest.raises(ValidationError):
-            _create(amount="-5.00")
+    def test_negative_amount_accepted(self):
+        # Negative amounts are valid (refunds, credits, reversals), on write and
+        # on read; only the min_amount/max_amount filters require ge=0.
+        assert _create(amount="-5.00").amount == Decimal("-5.00")
+        assert FinancialRecordUpdate(amount="-5.00").amount == Decimal("-5.00")
 
     def test_update_all_optional_and_validates(self):
         assert FinancialRecordUpdate().model_dump(exclude_unset=True) == {}
