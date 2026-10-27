@@ -1,0 +1,18 @@
+# Coverage configuration (moved from pytest.ini, which coverage.py does not read).
+# The coverage threshold is enforced once, by the final CI step.
+[run]
+source = backend
+omit =
+    */tests/*
+    */test_*.py
+    */__pycache__/*
+    */venv/*
+    */migrations/*
+
+[report]
+precision = 2
+show_missing = True
+skip_covered = False
+
+[html]
+directory = htmlcov

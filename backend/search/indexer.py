@@ -159,7 +159,9 @@ class SearchIndexer:
         counts = {}
 
         # Reindex tasks
-        result = await db.execute(text("""
+        result = await db.execute(
+            text(
+                """
             INSERT INTO search_index (entity_type, entity_id, domain, title, content, tags, search_vector)
             SELECT 
                 'tasks' as entity_type,
@@ -177,11 +179,15 @@ class SearchIndexer:
                 tags = EXCLUDED.tags,
                 search_vector = EXCLUDED.search_vector,
                 updated_at = CURRENT_TIMESTAMP
-        """))
+        """
+            )
+        )
         counts["tasks"] = result.rowcount
 
         # Reindex projects
-        result = await db.execute(text("""
+        result = await db.execute(
+            text(
+                """
             INSERT INTO search_index (entity_type, entity_id, domain, title, content, tags, search_vector)
             SELECT 
                 'projects' as entity_type,
@@ -198,11 +204,15 @@ class SearchIndexer:
                 content = EXCLUDED.content,
                 search_vector = EXCLUDED.search_vector,
                 updated_at = CURRENT_TIMESTAMP
-        """))
+        """
+            )
+        )
         counts["projects"] = result.rowcount
 
         # Reindex IT assets
-        result = await db.execute(text("""
+        result = await db.execute(
+            text(
+                """
             INSERT INTO search_index (entity_type, entity_id, domain, title, content, tags, search_vector)
             SELECT 
                 'it_assets' as entity_type,
@@ -219,11 +229,15 @@ class SearchIndexer:
                 content = EXCLUDED.content,
                 search_vector = EXCLUDED.search_vector,
                 updated_at = CURRENT_TIMESTAMP
-        """))
+        """
+            )
+        )
         counts["it_assets"] = result.rowcount
 
         # Reindex infrastructure
-        result = await db.execute(text("""
+        result = await db.execute(
+            text(
+                """
             INSERT INTO search_index (entity_type, entity_id, domain, title, content, tags, search_vector)
             SELECT 
                 'infrastructure' as entity_type,
@@ -240,11 +254,15 @@ class SearchIndexer:
                 content = EXCLUDED.content,
                 search_vector = EXCLUDED.search_vector,
                 updated_at = CURRENT_TIMESTAMP
-        """))
+        """
+            )
+        )
         counts["infrastructure"] = result.rowcount
 
         # Reindex documents
-        result = await db.execute(text("""
+        result = await db.execute(
+            text(
+                """
             INSERT INTO search_index (entity_type, entity_id, domain, title, content, tags, search_vector)
             SELECT 
                 'documents' as entity_type,
@@ -262,11 +280,15 @@ class SearchIndexer:
                 tags = EXCLUDED.tags,
                 search_vector = EXCLUDED.search_vector,
                 updated_at = CURRENT_TIMESTAMP
-        """))
+        """
+            )
+        )
         counts["documents"] = result.rowcount
 
         # Reindex financial records
-        result = await db.execute(text("""
+        result = await db.execute(
+            text(
+                """
             INSERT INTO search_index (entity_type, entity_id, domain, title, content, tags, search_vector)
             SELECT 
                 'financial_records' as entity_type,
@@ -283,7 +305,9 @@ class SearchIndexer:
                 content = EXCLUDED.content,
                 search_vector = EXCLUDED.search_vector,
                 updated_at = CURRENT_TIMESTAMP
-        """))
+        """
+            )
+        )
         counts["financial_records"] = result.rowcount
 
         await db.commit()

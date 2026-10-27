@@ -11,6 +11,10 @@ import logging
 
 from backend.models.task import Task
 
+# Task status values come from backend/schemas/task.py ("done", not "completed").
+DONE_STATUS = "done"
+CLOSED_STATUSES = ("done", "cancelled")  # never counted as overdue
+
 logger = logging.getLogger(__name__)
 
 
@@ -50,7 +54,7 @@ class TaskMetrics:
         total_tasks = result.scalar() or 0
 
         # Get completed tasks
-        completed_filters = filters + [Task.status == "completed"]
+        completed_filters = filters + [Task.status == DONE_STATUS]
         completed_query = select(func.count(Task.id)).where(and_(*completed_filters))
 
         result = await db.execute(completed_query)
@@ -161,7 +165,7 @@ class TaskMetrics:
 
         # Count overdue tasks
         overdue_query = select(func.count(Task.id)).where(
-            and_(Task.due_date < now, Task.status != "completed")
+            and_(Task.due_date < now, Task.status.notin_(CLOSED_STATUSES))
         )
 
         result = await db.execute(overdue_query)
@@ -170,7 +174,7 @@ class TaskMetrics:
         # Get overdue tasks by priority
         priority_query = (
             select(Task.priority, func.count(Task.id).label("count"))
-            .where(and_(Task.due_date < now, Task.status != "completed"))
+            .where(and_(Task.due_date < now, Task.status.notin_(CLOSED_STATUSES)))
             .group_by(Task.priority)
         )
 
@@ -206,7 +210,7 @@ class TaskMetrics:
                 and_(
                     Task.completed_at >= start_date,
                     Task.completed_at <= end_date,
-                    Task.status == "completed",
+                    Task.status == DONE_STATUS,
                 )
             )
             .group_by(func.date(Task.completed_at))
@@ -246,7 +250,7 @@ class TaskMetrics:
         Returns:
             Dict with average completion time metrics
         """
-        filters = [Task.status == "completed", Task.completed_at.isnot(None)]
+        filters = [Task.status == DONE_STATUS, Task.completed_at.isnot(None)]
 
         if start_date:
             filters.append(Task.created_at >= start_date)

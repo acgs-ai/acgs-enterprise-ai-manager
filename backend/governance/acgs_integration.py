@@ -39,6 +39,7 @@ class ACGSIntegration:
         constitution_path: Optional[str] = None,
         fail_closed: bool = True,
         audit_enabled: bool = True,
+        audit_dir: Optional[str] = None,
     ):
         """
         Initialize ACGS governance integration.
@@ -47,6 +48,7 @@ class ACGSIntegration:
             constitution_path: Path to YAML constitution file
             fail_closed: If True, block operations on validation failure (default: True)
             audit_enabled: If True, enable tamper-evident audit logging (default: True)
+            audit_dir: Audit log directory (default: see AuditLogger resolution order)
         """
         self.fail_closed = fail_closed
         self.audit_enabled = audit_enabled
@@ -63,7 +65,7 @@ class ACGSIntegration:
 
         # Initialize components
         self.rules_engine = RulesEngine(constitution_path)
-        self.audit_logger = AuditLogger() if audit_enabled else None
+        self.audit_logger = AuditLogger(audit_dir) if audit_enabled else None
 
         # Initialize acgs-lite engine if available
         self.acgs_engine = None

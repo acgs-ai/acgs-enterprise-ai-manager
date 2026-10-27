@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/store/auth'
+import { sanitizeReturnTo } from '@/auth/returnTo'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -14,6 +15,11 @@ const router = createRouter({
       path: '/login',
       name: 'Login',
       component: () => import('@/views/Login.vue')
+    },
+    {
+      path: '/callback',
+      name: 'Callback',
+      component: () => import('@/views/Callback.vue')
     },
     {
       path: '/tasks',
@@ -55,15 +61,15 @@ const router = createRouter({
 })
 
 // Navigation guard for authentication
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to) => {
   const authStore = useAuthStore()
+  await authStore.init()
 
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
-    next('/login')
-  } else if (to.path === '/login' && authStore.isAuthenticated) {
-    next('/')
-  } else {
-    next()
+    return { path: '/login', query: { returnTo: to.fullPath } }
+  }
+  if (to.path === '/login' && authStore.isAuthenticated) {
+    return sanitizeReturnTo(to.query.returnTo)
   }
 })
 

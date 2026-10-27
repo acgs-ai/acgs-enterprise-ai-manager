@@ -7,12 +7,14 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 from pydantic import BaseModel, Field
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
+import uuid
 
 from backend.database import get_db
 from backend.ai.recommendation_engine import RecommendationEngine, RecommendationDomain
 from backend.governance.acgs_integration import get_governance
+from backend.models.recommendation import Recommendation
 
 logger = logging.getLogger(__name__)
 
@@ -99,12 +101,65 @@ async def generate_recommendation(
             domain=domain, entity_id=request.entity_id, context=request.context
         )
 
-        # TODO: Store recommendation in database once schema is ready
-        # For now, return the generated recommendation
-        logger.info(f"Generated recommendation for {domain}:{request.entity_id}")
+        # Governance block: never persist, never expose violation details
+        if recommendation.get("status") == "blocked":
+            logger.warning(
+                f"Recommendation for {domain.value}:{request.entity_id} blocked by governance"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Recommendation blocked by governance policy",
+            )
 
-        return RecommendationResponse(**recommendation)
+        # Server-side value: always tz-aware UTC, so a bad engine value can
+        # never surface as a client-facing 400.
+        generated_at = datetime.now(timezone.utc)
+        row = Recommendation(
+            id=uuid.uuid4(),
+            domain=domain.value,
+            entity_type=domain.value,
+            entity_id=request.entity_id,
+            suggestion=recommendation["suggestion"],
+            confidence=round(float(recommendation["confidence"]), 2),
+            rationale=recommendation.get("rationale"),
+            status=recommendation["status"],
+            recommendation_metadata=recommendation.get("metadata") or {},
+            governance_check=recommendation.get("governance_check"),
+            generated_at=generated_at,
+        )
+        # Capture the id up front so the response never depends on the row
+        # state after commit/refresh.
+        row_id = row.id
+        try:
+            db.add(row)
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
 
+        # The row is already committed: a refresh failure must not become a 500
+        # (or a rollback). Fall back to the values we already hold.
+        try:
+            await db.refresh(row)
+        except Exception as e:
+            logger.warning(
+                f"Refresh failed after committing recommendation {row_id}: {e}"
+            )
+
+        logger.info(
+            f"Stored recommendation {row_id} for {domain.value}:{request.entity_id}"
+        )
+
+        return RecommendationResponse(
+            **{
+                **recommendation,
+                "id": str(row_id),
+                "generated_at": generated_at.isoformat(),
+            }
+        )
+
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:

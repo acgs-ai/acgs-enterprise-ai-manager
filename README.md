@@ -69,8 +69,13 @@ pip install -r backend/requirements.txt
 3. Configure environment:
 ```bash
 cp .env.example .env
-# Edit .env with your database credentials
+# Edit .env with your database credentials and the AUTH_* settings
+# (AUTH_JWT_ISSUER, AUTH_JWT_AUDIENCE, and AUTH_JWKS_URL or AUTH_JWT_KEY)
 ```
+All `/api/v1/*` routes require `Authorization: Bearer <token>`, where the
+token is issued by your external identity provider. This API only verifies
+tokens and has no login endpoint. Without the `AUTH_*` settings, protected
+routes return 503. Only `/health`, `/`, `/docs` and `/redoc` are public.
 
 4. Initialize database:
 ```bash

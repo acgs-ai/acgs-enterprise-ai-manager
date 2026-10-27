@@ -79,7 +79,7 @@ const fetchProjects = async () => {
   loading.value = true
   error.value = ''
   try {
-    const response = await apiClient.get('/projects')
+    const response = await apiClient.get('/projects/')
     projects.value = response.data
   } catch (err) {
     error.value = 'Failed to load projects'
@@ -94,7 +94,7 @@ const saveProject = async () => {
     if (editingProject.value) {
       await apiClient.put(`/projects/${editingProject.value.id}`, form.value)
     } else {
-      await apiClient.post('/projects', form.value)
+      await apiClient.post('/projects/', form.value)
     }
     await fetchProjects()
     cancelForm()

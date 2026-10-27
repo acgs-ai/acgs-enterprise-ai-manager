@@ -381,7 +381,7 @@ PostgreSQL Primary
 | Governance | ACGS-Lite | Constitutional AI governance |
 | ORM | SQLAlchemy 2.0 | Database abstraction |
 | Validation | Pydantic 2.0 | Data validation and serialization |
-| Auth | JWT (python-jose) | Token-based authentication |
+| Auth | JWT (PyJWT), external IdP | Bearer-token verification |
 | Server | Uvicorn/Gunicorn | ASGI server |
 | Proxy | Nginx | Reverse proxy and load balancer |
 | Testing | pytest | Test framework |

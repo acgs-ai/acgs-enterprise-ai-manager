@@ -226,3 +226,117 @@ class TestAuditLogger:
         assert "previous_hash" in entry
         assert "entry_hash" in entry
         assert entry["previous_hash"] == "GENESIS"
+
+    def test_chain_continues_across_day_boundary(self, temp_dir):
+        """A new day's log file must chain from the previous day's last entry."""
+        audit_dir = temp_dir / "audit_logs"
+        first = AuditLogger(str(audit_dir))
+        first.log_enforcement(operation="Day 1", action="BLOCKED", reason="r")
+        # Simulate the entry having been written on an earlier day.
+        first.current_log_file.rename(audit_dir / "audit_2000-01-01.jsonl")
+
+        second = AuditLogger(str(audit_dir))
+        second.log_enforcement(operation="Day 2", action="BLOCKED", reason="r")
+
+        integrity = second.verify_chain_integrity()
+        assert integrity["valid"] is True, integrity["broken_links"]
+        assert integrity["total_entries"] == 2
+
+    def test_non_daily_files_ignored(self, temp_dir):
+        """Files not named audit_YYYY-MM-DD.jsonl neither seed nor join the chain."""
+        audit_dir = temp_dir / "audit_logs"
+        first = AuditLogger(str(audit_dir))
+        real_hash = first.log_enforcement(operation="op", action="BLOCKED", reason="r")
+        # Sorts after any dated file; must not hijack the chain seed.
+        planted = {"entry_hash": "f" * 64, "previous_hash": "GENESIS"}
+        (audit_dir / "audit_zzz.jsonl").write_text(json.dumps(planted) + "\n")
+
+        second = AuditLogger(str(audit_dir))
+        assert second.last_hash == real_hash
+        second.log_enforcement(operation="op2", action="BLOCKED", reason="r")
+
+        integrity = second.verify_chain_integrity()
+        assert integrity["valid"] is True, integrity["broken_links"]
+        assert integrity["total_entries"] == 2
+        assert all(
+            "audit_zzz" not in link.get("file", "")
+            for link in integrity["broken_links"]
+        )
+
+    @pytest.mark.parametrize("bad_tail", ["{not json", "", "   "])
+    def test_corrupt_last_line_seeds_from_previous_entry(self, temp_dir, bad_tail):
+        """A corrupt or empty last line falls back to the last valid entry."""
+        audit_dir = temp_dir / "audit_logs"
+        first = AuditLogger(str(audit_dir))
+        good_hash = first.log_enforcement(operation="op", action="BLOCKED", reason="r")
+        with open(first.current_log_file, "a") as f:
+            f.write(bad_tail + "\n")
+
+        second = AuditLogger(str(audit_dir))
+
+        assert second.last_hash == good_hash
+        assert second.last_hash != "GENESIS"
+
+    def test_invalid_utf8_does_not_stop_logger_and_is_flagged(self, temp_dir):
+        """A stray invalid byte must not crash init, query or verification."""
+        audit_dir = temp_dir / "audit_logs"
+        first = AuditLogger(str(audit_dir))
+        good_hash = first.log_enforcement(operation="op", action="BLOCKED", reason="r")
+        with open(first.current_log_file, "ab") as f:
+            f.write(b"\xff\xfe not utf-8\n")
+
+        second = AuditLogger(str(audit_dir))
+
+        assert second.last_hash == good_hash
+        assert len(second.query_audit_trail(limit=10)) == 1
+        integrity = second.verify_chain_integrity()
+        assert integrity["valid"] is False
+        assert integrity["broken_links"]
+
+    def test_corrupt_last_file_seeds_from_previous_file(self, temp_dir):
+        """If the newest daily file has no valid entry, use the previous file."""
+        audit_dir = temp_dir / "audit_logs"
+        first = AuditLogger(str(audit_dir))
+        good_hash = first.log_enforcement(operation="op", action="BLOCKED", reason="r")
+        first.current_log_file.rename(audit_dir / "audit_2000-01-01.jsonl")
+        (audit_dir / "audit_2000-01-02.jsonl").write_text("{corrupt\n")
+
+        second = AuditLogger(str(audit_dir))
+
+        assert second.last_hash == good_hash
+
+    def test_corrupt_line_flagged_and_chain_still_walked(self, temp_dir):
+        """verify_chain_integrity reports the corrupt line and keeps verifying."""
+        audit_dir = temp_dir / "audit_logs"
+        first = AuditLogger(str(audit_dir))
+        first.log_enforcement(operation="op", action="BLOCKED", reason="r")
+        with open(first.current_log_file, "a") as f:
+            f.write("{not json\n")
+
+        second = AuditLogger(str(audit_dir))
+        second.log_enforcement(operation="op2", action="BLOCKED", reason="r")
+        integrity = second.verify_chain_integrity()
+
+        assert integrity["valid"] is False
+        assert integrity["total_entries"] == 2
+        assert [link.get("type") for link in integrity["broken_links"]] == ["malformed"]
+        assert integrity["broken_links"][0]["line"] == 2
+
+    def test_audit_dir_from_env(self, temp_dir, monkeypatch):
+        """ACGS_AUDIT_DIR is used when no directory argument is given."""
+        env_dir = temp_dir / "env_audit"
+        monkeypatch.setenv("ACGS_AUDIT_DIR", str(env_dir))
+
+        logger = AuditLogger()
+
+        assert logger.audit_dir == env_dir
+        assert env_dir.exists()
+
+    def test_audit_dir_argument_overrides_env(self, temp_dir, monkeypatch):
+        """An explicit audit_dir argument wins over ACGS_AUDIT_DIR."""
+        monkeypatch.setenv("ACGS_AUDIT_DIR", str(temp_dir / "env_audit"))
+        explicit = temp_dir / "explicit_audit"
+
+        logger = AuditLogger(str(explicit))
+
+        assert logger.audit_dir == explicit

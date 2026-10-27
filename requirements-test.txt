@@ -1,14 +1,14 @@
 # Testing dependencies for ACGS Enterprise Manager
 
 # Core testing framework
-pytest==7.4.3
-pytest-cov==4.1.0
-pytest-asyncio==0.21.1
-pytest-mock==3.12.0
-pytest-xdist==3.5.0  # Parallel test execution
+pytest==9.1.1
+pytest-cov==7.1.0
+pytest-asyncio==1.4.1
+pytest-mock==3.17.0
+pytest-xdist==3.8.0  # Parallel test execution
 
 # Code coverage
-coverage[toml]==7.3.2
+coverage[toml]==7.16.2
 
 # Test utilities
 faker==20.1.0  # Generate fake data for tests
@@ -17,19 +17,25 @@ responses==0.24.1  # Mock HTTP requests
 factory-boy==3.3.0  # Test data factories
 
 # Database testing
-pytest-postgresql==5.0.0
-sqlalchemy==2.0.23
+pytest-postgresql==6.1.1
+sqlalchemy==2.0.36
 
 # API testing
 httpx==0.25.2  # Async HTTP client for FastAPI testing
-fastapi==0.104.1
+fastapi==0.109.1
 uvicorn==0.24.0
 
 # Linting and formatting (for CI)
-black==23.12.0
+black==24.10.0
 flake8==6.1.0
 mypy==1.7.1
 isort==5.13.2
 
 # YAML support
-pyyaml==6.0.1
+pyyaml==6.0.2
+
+# Runtime imports used by backend/ (not in requirements.txt)
+python-dotenv==1.2.2
+PyJWT[crypto]==2.15.1
+email-validator==2.1.0
+python-multipart==0.0.31

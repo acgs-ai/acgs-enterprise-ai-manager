@@ -93,7 +93,7 @@ const fetchAssets = async () => {
   loading.value = true
   error.value = ''
   try {
-    const response = await apiClient.get('/assets')
+    const response = await apiClient.get('/assets/')
     assets.value = response.data
   } catch (err) {
     error.value = 'Failed to load assets'
@@ -108,7 +108,7 @@ const saveAsset = async () => {
     if (editingAsset.value) {
       await apiClient.put(`/assets/${editingAsset.value.id}`, form.value)
     } else {
-      await apiClient.post('/assets', form.value)
+      await apiClient.post('/assets/', form.value)
     }
     await fetchAssets()
     cancelForm()

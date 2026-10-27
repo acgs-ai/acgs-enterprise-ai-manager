@@ -118,3 +118,7 @@ coverage/
 # Build artifacts
 *.pyc
 *.pyo
+
+# Coverage / audit artifacts
+coverage.xml
+backend/governance/audit_logs/*.jsonl

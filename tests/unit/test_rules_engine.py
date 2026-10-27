@@ -28,6 +28,246 @@ class TestRulesEngine:
         engine = RulesEngine(str(missing_file))
 
         assert engine.rules == []
+        assert engine.load_error is not None
+        assert "not found" in engine.load_error
+
+    def test_missing_constitution_fails_closed(self, temp_dir, sample_context):
+        """Benign operations are blocked when the constitution file is missing."""
+        engine = RulesEngine(str(temp_dir / "nonexistent.yaml"))
+
+        result = engine.validate("List all users", sample_context)
+
+        assert result["valid"] is False
+        assert result["violations"][0]["rule_id"] == "constitution-unavailable"
+        assert result["violations"][0]["action"] == "BLOCK"
+        assert result["violations"][0]["severity"] == "CRITICAL"
+
+    def test_harmful_operation_blocked_when_constitution_missing(
+        self, temp_dir, sample_context
+    ):
+        """Harmful operations stay blocked when the constitution is missing."""
+        engine = RulesEngine(str(temp_dir / "nonexistent.yaml"))
+
+        result = engine.validate("harm users", sample_context)
+
+        assert result["valid"] is False
+        assert result["violations"][0]["rule_id"] == "constitution-unavailable"
+
+    def test_malformed_yaml_fails_closed(self, temp_dir, sample_context):
+        """Unparseable constitution YAML records a load error and blocks."""
+        bad_file = temp_dir / "bad.yaml"
+        bad_file.write_text("rules: [\n")
+
+        engine = RulesEngine(str(bad_file))
+        result = engine.validate("List all users", sample_context)
+
+        assert engine.load_error is not None
+        assert result["valid"] is False
+        assert result["violations"][0]["rule_id"] == "constitution-unavailable"
+
+    def test_empty_file_fails_closed(self, temp_dir, sample_context):
+        """A zero-byte constitution is not a constitution; it must block."""
+        empty_file = temp_dir / "empty.yaml"
+        empty_file.write_text("")
+
+        engine = RulesEngine(str(empty_file))
+
+        assert engine.load_error is not None
+        assert engine.validate("List all users", sample_context)["valid"] is False
+
+    @pytest.mark.parametrize(
+        "content",
+        ["rules: []\n", "rule:\n  - id: x\n    pattern: harm\n", "metadata: {}\n"],
+        ids=["empty-list", "rule-typo", "no-rules-key"],
+    )
+    def test_missing_or_empty_rules_fails_closed(
+        self, temp_dir, sample_context, content
+    ):
+        """A missing or empty rule list must not turn into allow-all."""
+        rules_file = temp_dir / "no_rules.yaml"
+        rules_file.write_text(content)
+
+        engine = RulesEngine(str(rules_file))
+        result = engine.validate("List all users", sample_context)
+
+        assert engine.load_error is not None
+        assert engine.rules == []
+        assert result["valid"] is False
+        assert result["violations"][0]["rule_id"] == "constitution-unavailable"
+
+    @pytest.mark.parametrize(
+        "rules_yaml",
+        [
+            '  - pattern: "harm"\n',
+            '  - id: ""\n    pattern: "harm"\n',
+            '  - id: 42\n    pattern: "harm"\n',
+            '  - id: dup\n    pattern: "a"\n  - id: dup\n    pattern: "b"\n',
+        ],
+        ids=["missing-id", "empty-id", "non-string-id", "duplicate-id"],
+    )
+    def test_bad_rule_id_fails_closed(self, temp_dir, sample_context, rules_yaml):
+        """Every rule needs a unique, non-empty string id."""
+        rules_file = temp_dir / "bad_id.yaml"
+        rules_file.write_text("rules:\n" + rules_yaml)
+
+        engine = RulesEngine(str(rules_file))
+
+        assert engine.load_error is not None
+        for operation in ("harm users", "List all users"):
+            result = engine.validate(operation, sample_context)
+            assert result["valid"] is False
+            assert result["violations"][0]["rule_id"] == "constitution-unavailable"
+
+    def test_unavailable_description_hides_details(self, temp_dir, sample_context):
+        """The violation description is generic: no path, no exception text."""
+        rules_file = temp_dir / "secret_dir" / "bad.yaml"
+        rules_file.parent.mkdir()
+        rules_file.write_text(
+            'rules:\n  - id: leaky-rule\n    pattern: "harm|("\n    action: BLOCK\n'
+        )
+
+        engine = RulesEngine(str(rules_file))
+        description = engine.validate("harm", sample_context)["violations"][0][
+            "description"
+        ]
+
+        assert "leaky-rule" in engine.load_error
+        assert description == "Governance constitution unavailable; operation blocked"
+        assert str(rules_file) not in description
+        assert "secret_dir" not in description
+        assert "leaky-rule" not in description
+        assert "missing )" not in description
+
+        missing = RulesEngine(str(temp_dir / "secret_dir" / "missing.yaml"))
+        description = missing.validate("x", sample_context)["violations"][0][
+            "description"
+        ]
+        assert "missing.yaml" in missing.load_error
+        assert "missing.yaml" not in description
+        assert "not found" not in description
+
+    @pytest.mark.parametrize("action", ["BLOCK", "REQUIRE_APPROVAL"])
+    def test_invalid_regex_fails_closed(self, temp_dir, sample_context, action):
+        """A rule whose pattern does not compile must not silently disable itself."""
+        rules_file = temp_dir / "bad_regex.yaml"
+        rules_file.write_text(
+            "rules:\n"
+            "  - id: bad-rule\n"
+            '    pattern: "harm|("\n'
+            f"    action: {action}\n"
+            "    severity: CRITICAL\n"
+        )
+
+        engine = RulesEngine(str(rules_file))
+
+        assert engine.load_error is not None
+        assert "bad-rule" in engine.load_error
+        for operation in ("harm users", "List all users"):
+            result = engine.validate(operation, sample_context)
+            assert result["valid"] is False
+            assert result["violations"][0]["rule_id"] == "constitution-unavailable"
+
+    def test_invalid_context_pattern_fails_closed(self, temp_dir, sample_context):
+        """An invalid context_pattern is also a load error, not a skipped rule."""
+        rules_file = temp_dir / "bad_ctx.yaml"
+        rules_file.write_text(
+            "rules:\n"
+            "  - id: bad-ctx\n"
+            "    context_key: user_id\n"
+            '    context_pattern: "test_("\n'
+            "    action: BLOCK\n"
+        )
+
+        engine = RulesEngine(str(rules_file))
+
+        assert engine.load_error is not None
+        assert engine.validate("List all users", sample_context)["valid"] is False
+
+    def test_unknown_action_fails_closed(self, temp_dir, sample_context):
+        """A rule with an unknown action (typo) makes the constitution untrusted."""
+        rules_file = temp_dir / "typo_action.yaml"
+        rules_file.write_text(
+            "rules:\n"
+            "  - id: typo-rule\n"
+            '    pattern: "harm"\n'
+            "    action: BLOK\n"
+        )
+
+        engine = RulesEngine(str(rules_file))
+
+        assert engine.load_error is not None
+        assert "BLOK" in engine.load_error
+        for operation in ("harm users", "List all users"):
+            result = engine.validate(operation, sample_context)
+            assert result["valid"] is False
+            assert result["violations"][0]["rule_id"] == "constitution-unavailable"
+
+    @pytest.mark.parametrize(
+        "action", ["BLOCK", "REQUIRE_APPROVAL", "VALIDATE", "AUDIT", "PROTECT"]
+    )
+    def test_known_actions_load(self, temp_dir, action):
+        """Each known action loads without a load error."""
+        rules_file = temp_dir / "known_action.yaml"
+        rules_file.write_text(
+            "rules:\n"
+            "  - id: known-rule\n"
+            '    pattern: "example"\n'
+            f"    action: {action}\n"
+        )
+
+        engine = RulesEngine(str(rules_file))
+
+        assert engine.load_error is None
+        assert len(engine.rules) == 1
+
+    def test_missing_action_defaults_to_block(self, temp_dir, sample_context):
+        """A rule without an action still loads and blocks on match."""
+        rules_file = temp_dir / "no_action.yaml"
+        rules_file.write_text('rules:\n  - id: no-action\n    pattern: "harm"\n')
+
+        engine = RulesEngine(str(rules_file))
+
+        assert engine.load_error is None
+        assert engine.validate("harm users", sample_context)["valid"] is False
+
+    def test_production_constitution_loads(self):
+        """The shipped config loads cleanly (all actions known, all regexes valid)."""
+        config = (
+            Path(__file__).resolve().parents[2] / "config" / "governance_rules.yaml"
+        )
+
+        engine = RulesEngine(str(config))
+
+        assert engine.load_error is None
+        assert len(engine.rules) == 15
+
+    def test_unmatched_operation_allowed_by_default(
+        self, sample_governance_rules, sample_context
+    ):
+        """Pin current policy: operations matching no rule are allowed.
+
+        Default-deny (enforcement.default_action) is a tracked follow-up; if it
+        is implemented this test must change deliberately.
+        """
+        engine = RulesEngine(str(sample_governance_rules))
+
+        result = engine.validate("Read the quarterly calendar", sample_context)
+
+        assert result["valid"] is True
+        assert result["matched_rules"] == []
+        assert result["violations"] == []
+
+    def test_reload_recovers_after_load_error(self, temp_dir, sample_context):
+        """A successful reload clears a previous load error."""
+        rules_file = temp_dir / "later.yaml"
+        engine = RulesEngine(str(rules_file))
+        assert engine.load_error is not None
+
+        rules_file.write_text('rules:\n  - id: only-rule\n    pattern: "harm"\n')
+        engine.reload_constitution()
+
+        assert engine.load_error is None
+        assert engine.validate("List all users", sample_context)["valid"] is True
 
     def test_validate_blocking_operation(self, sample_governance_rules, sample_context):
         """Test validation blocks operations matching BLOCK rules."""

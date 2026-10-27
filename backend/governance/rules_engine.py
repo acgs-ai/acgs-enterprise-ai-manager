@@ -11,6 +11,9 @@ import yaml
 
 logger = logging.getLogger(__name__)
 
+# Rule actions the engine accepts (case-sensitive, as validate() compares them).
+KNOWN_ACTIONS = frozenset({"BLOCK", "REQUIRE_APPROVAL", "VALIDATE", "AUDIT", "PROTECT"})
+
 
 class RulesEngine:
     """
@@ -31,40 +34,85 @@ class RulesEngine:
         self.rules: List[Dict[str, Any]] = []
         self.enforcement_config: Dict[str, Any] = {}
         self.audit_config: Dict[str, Any] = {}
+        # Set when the constitution cannot be loaded; validate() then fails closed.
+        self.load_error: Optional[str] = None
 
         self._load_constitution()
 
     def _load_constitution(self):
         """Load and parse constitution YAML file."""
+        self.load_error = None
         try:
             with open(self.constitution_path, "r") as f:
                 constitution = yaml.safe_load(f)
 
-            self.rules = constitution.get("rules", [])
+            if not isinstance(constitution, dict):
+                raise TypeError("constitution must be a YAML mapping")
+
+            # A missing or empty rule list (e.g. a "rule:" typo) must not
+            # become allow-all; treat it as an untrusted constitution.
+            if "rules" not in constitution:
+                raise ValueError("constitution is missing 'rules'")
+            rules = constitution["rules"]
+            if not isinstance(rules, list):
+                raise TypeError("constitution 'rules' must be a list")
+            if not rules:
+                raise ValueError("constitution 'rules' is empty")
+
+            # Every rule needs a unique, non-empty string id; validate()
+            # reports matches by id.
+            seen_ids = set()
+            for index, rule in enumerate(rules):
+                if not isinstance(rule, dict):
+                    raise TypeError(f"rule at index {index} must be a mapping")
+                rule_id = rule.get("id")
+                if not isinstance(rule_id, str) or not rule_id.strip():
+                    raise ValueError(f"rule at index {index} has no valid 'id'")
+                if rule_id in seen_ids:
+                    raise ValueError(f"duplicate rule id {rule_id!r}")
+                seen_ids.add(rule_id)
+
+            self.rules = rules
             self.enforcement_config = constitution.get("enforcement", {})
             self.audit_config = constitution.get("audit", {})
 
-            # Compile regex patterns for efficiency
+            # Compile regex patterns. An invalid regex makes the whole
+            # constitution untrusted (fail closed via load_error), rather than
+            # silently disabling the rule.
             for rule in self.rules:
-                if "pattern" in rule:
-                    try:
+                # Unknown actions (e.g. a "BLOK" typo) would otherwise match
+                # without adding a violation and silently allow. Missing
+                # action still defaults to BLOCK in validate().
+                action = rule.get("action", "BLOCK")
+                if action not in KNOWN_ACTIONS:
+                    raise ValueError(
+                        f"Unknown action {action!r} in rule {rule.get('id')}"
+                    )
+                try:
+                    if "pattern" in rule:
                         rule["_compiled_pattern"] = re.compile(
                             rule["pattern"], re.IGNORECASE
                         )
-                    except re.error as e:
-                        logger.error(f"Invalid regex in rule {rule.get('id')}: {e}")
-                        rule["_compiled_pattern"] = None
+                    if rule.get("context_pattern"):
+                        re.compile(rule["context_pattern"], re.IGNORECASE)
+                except re.error as e:
+                    raise ValueError(
+                        f"Invalid regex in rule {rule.get('id')}: {e}"
+                    ) from e
 
             logger.info(f"Loaded {len(self.rules)} governance rules")
 
         except FileNotFoundError:
-            logger.error(f"Constitution file not found: {self.constitution_path}")
+            self.load_error = f"Constitution file not found: {self.constitution_path}"
+            logger.error(self.load_error)
             self.rules = []
         except yaml.YAMLError as e:
-            logger.error(f"Failed to parse constitution YAML: {e}")
+            self.load_error = f"Failed to parse constitution YAML: {e}"
+            logger.error(self.load_error)
             self.rules = []
         except Exception as e:
-            logger.error(f"Error loading constitution: {e}")
+            self.load_error = f"Error loading constitution: {e}"
+            logger.error(self.load_error)
             self.rules = []
 
     def validate(self, operation: str, context: Dict[str, Any]) -> Dict[str, Any]:
@@ -82,6 +130,27 @@ class RulesEngine:
                 - requires_approval: bool
                 - matched_rules: List[str]
         """
+        # Fail closed: without a loaded constitution nothing can be validated.
+        if self.load_error is not None:
+            return {
+                "valid": False,
+                "violations": [
+                    {
+                        "rule_id": "constitution-unavailable",
+                        "severity": "CRITICAL",
+                        # Generic on purpose: this reaches API 403 bodies.
+                        # Details stay in load_error and the log.
+                        "description": (
+                            "Governance constitution unavailable; operation blocked"
+                        ),
+                        "action": "BLOCK",
+                    }
+                ],
+                "requires_approval": False,
+                "matched_rules": [],
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+
         violations = []
         matched_rules = []
         requires_approval = False
