@@ -247,5 +247,9 @@ class TestList:
         await InfrastructureService.list_infrastructure(
             db, filters=InfrastructureFilter(search="x")
         )
-        sql, _ = _sql(db.execute.call_args_list[1].args[0])
-        assert "infrastructure.configuration" in sql.split("WHERE")[1]
+        # Count and list queries both match name OR configuration (as text).
+        for call in db.execute.call_args_list:
+            where = _sql(call.args[0])[0].split("WHERE")[1]
+            assert "infrastructure.name ILIKE" in where
+            assert " OR " in where
+            assert "CAST(infrastructure.configuration AS VARCHAR) ILIKE" in where
