@@ -28,6 +28,92 @@ class TestRulesEngine:
         engine = RulesEngine(str(missing_file))
 
         assert engine.rules == []
+        assert engine.load_error is not None
+        assert "not found" in engine.load_error
+
+    def test_missing_constitution_fails_closed(self, temp_dir, sample_context):
+        """Benign operations are blocked when the constitution file is missing."""
+        engine = RulesEngine(str(temp_dir / "nonexistent.yaml"))
+
+        result = engine.validate("List all users", sample_context)
+
+        assert result["valid"] is False
+        assert result["violations"][0]["rule_id"] == "constitution-unavailable"
+        assert result["violations"][0]["action"] == "BLOCK"
+        assert result["violations"][0]["severity"] == "CRITICAL"
+
+    def test_harmful_operation_blocked_when_constitution_missing(
+        self, temp_dir, sample_context
+    ):
+        """Harmful operations stay blocked when the constitution is missing."""
+        engine = RulesEngine(str(temp_dir / "nonexistent.yaml"))
+
+        result = engine.validate("harm users", sample_context)
+
+        assert result["valid"] is False
+        assert result["violations"][0]["rule_id"] == "constitution-unavailable"
+
+    def test_malformed_yaml_fails_closed(self, temp_dir, sample_context):
+        """Unparseable constitution YAML records a load error and blocks."""
+        bad_file = temp_dir / "bad.yaml"
+        bad_file.write_text("rules: [\n")
+
+        engine = RulesEngine(str(bad_file))
+        result = engine.validate("List all users", sample_context)
+
+        assert engine.load_error is not None
+        assert result["valid"] is False
+        assert result["violations"][0]["rule_id"] == "constitution-unavailable"
+
+    def test_empty_file_fails_closed(self, temp_dir, sample_context):
+        """A zero-byte constitution is not a constitution; it must block."""
+        empty_file = temp_dir / "empty.yaml"
+        empty_file.write_text("")
+
+        engine = RulesEngine(str(empty_file))
+
+        assert engine.load_error is not None
+        assert engine.validate("List all users", sample_context)["valid"] is False
+
+    def test_empty_rules_list_is_not_an_error(self, temp_dir, sample_context):
+        """An explicitly empty rule list loads cleanly (no load error)."""
+        rules_file = temp_dir / "empty_rules.yaml"
+        rules_file.write_text("rules: []\n")
+
+        engine = RulesEngine(str(rules_file))
+        result = engine.validate("List all users", sample_context)
+
+        assert engine.load_error is None
+        assert engine.rules == []
+        assert result["valid"] is True
+
+    def test_unmatched_operation_allowed_by_default(
+        self, sample_governance_rules, sample_context
+    ):
+        """Pin current policy: operations matching no rule are allowed.
+
+        Default-deny (enforcement.default_action) is a tracked follow-up; if it
+        is implemented this test must change deliberately.
+        """
+        engine = RulesEngine(str(sample_governance_rules))
+
+        result = engine.validate("Read the quarterly calendar", sample_context)
+
+        assert result["valid"] is True
+        assert result["matched_rules"] == []
+        assert result["violations"] == []
+
+    def test_reload_recovers_after_load_error(self, temp_dir, sample_context):
+        """A successful reload clears a previous load error."""
+        rules_file = temp_dir / "later.yaml"
+        engine = RulesEngine(str(rules_file))
+        assert engine.load_error is not None
+
+        rules_file.write_text("rules: []\n")
+        engine.reload_constitution()
+
+        assert engine.load_error is None
+        assert engine.validate("List all users", sample_context)["valid"] is True
 
     def test_validate_blocking_operation(self, sample_governance_rules, sample_context):
         """Test validation blocks operations matching BLOCK rules."""

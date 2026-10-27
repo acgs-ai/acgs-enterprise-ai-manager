@@ -222,3 +222,32 @@ class TestACGSIntegration:
         assert instance is not None
         assert instance.fail_closed is True
         assert instance.audit_enabled is True
+
+    def test_missing_constitution_blocks_harmful_operation(self, temp_dir):
+        """Missing constitution fails closed end to end: validate -> BLOCK, enforce -> False."""
+        integration = ACGSIntegration(
+            constitution_path=str(temp_dir / "nonexistent.yaml")
+        )
+
+        result = integration.validate_operation(
+            operation="harm users", context={}, agent_id="test_agent"
+        )
+
+        assert result["valid"] is False
+        assert result["action"] == "BLOCK"
+        assert any(
+            v["rule_id"] == "constitution-unavailable" for v in result["violations"]
+        )
+        assert integration.enforce_decision(result, "harm users") is False
+
+    def test_audit_dir_passed_through(self, sample_governance_rules, temp_dir):
+        """audit_dir argument is passed to the AuditLogger."""
+        audit_dir = temp_dir / "custom_audit"
+        integration = ACGSIntegration(
+            constitution_path=str(sample_governance_rules), audit_dir=str(audit_dir)
+        )
+
+        integration.validate_operation("List all users", {}, "test_agent")
+
+        assert integration.audit_logger.audit_dir == audit_dir
+        assert len(list(audit_dir.glob("audit_*.jsonl"))) == 1

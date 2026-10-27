@@ -28,10 +28,14 @@ class AuditLogger:
         Initialize audit logger.
 
         Args:
-            audit_dir: Directory for audit logs (default: backend/governance/audit_logs)
+            audit_dir: Directory for audit logs. Resolution order: this argument,
+                then the ACGS_AUDIT_DIR environment variable, then
+                backend/governance/audit_logs.
         """
         if audit_dir is None:
-            audit_dir = os.path.join(os.path.dirname(__file__), "audit_logs")
+            audit_dir = os.environ.get("ACGS_AUDIT_DIR") or os.path.join(
+                os.path.dirname(__file__), "audit_logs"
+            )
 
         self.audit_dir = Path(audit_dir)
         self.audit_dir.mkdir(parents=True, exist_ok=True)
@@ -47,13 +51,19 @@ class AuditLogger:
         return self.audit_dir / f"audit_{date_str}.jsonl"
 
     def _get_last_hash(self) -> str:
-        """Get hash of last audit entry for chain integrity."""
-        if not self.current_log_file.exists():
-            return "GENESIS"
+        """
+        Get hash of last audit entry for chain integrity.
+
+        Seeds from the newest existing log file (not only today's), so the
+        chain continues across day boundaries the same way
+        verify_chain_integrity() walks it.
+        """
+        log_files = sorted(self.audit_dir.glob("audit_*.jsonl"))
 
         try:
-            with open(self.current_log_file, "r") as f:
-                lines = f.readlines()
+            for log_file in reversed(log_files):
+                with open(log_file, "r") as f:
+                    lines = [line for line in f.read().splitlines() if line.strip()]
                 if lines:
                     last_entry = json.loads(lines[-1])
                     return last_entry.get("entry_hash", "GENESIS")

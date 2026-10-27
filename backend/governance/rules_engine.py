@@ -31,16 +31,26 @@ class RulesEngine:
         self.rules: List[Dict[str, Any]] = []
         self.enforcement_config: Dict[str, Any] = {}
         self.audit_config: Dict[str, Any] = {}
+        # Set when the constitution cannot be loaded; validate() then fails closed.
+        self.load_error: Optional[str] = None
 
         self._load_constitution()
 
     def _load_constitution(self):
         """Load and parse constitution YAML file."""
+        self.load_error = None
         try:
             with open(self.constitution_path, "r") as f:
                 constitution = yaml.safe_load(f)
 
-            self.rules = constitution.get("rules", [])
+            if not isinstance(constitution, dict):
+                raise TypeError("constitution must be a YAML mapping")
+
+            rules = constitution.get("rules", [])
+            if not isinstance(rules, list):
+                raise TypeError("constitution 'rules' must be a list")
+
+            self.rules = rules
             self.enforcement_config = constitution.get("enforcement", {})
             self.audit_config = constitution.get("audit", {})
 
@@ -58,13 +68,16 @@ class RulesEngine:
             logger.info(f"Loaded {len(self.rules)} governance rules")
 
         except FileNotFoundError:
-            logger.error(f"Constitution file not found: {self.constitution_path}")
+            self.load_error = f"Constitution file not found: {self.constitution_path}"
+            logger.error(self.load_error)
             self.rules = []
         except yaml.YAMLError as e:
-            logger.error(f"Failed to parse constitution YAML: {e}")
+            self.load_error = f"Failed to parse constitution YAML: {e}"
+            logger.error(self.load_error)
             self.rules = []
         except Exception as e:
-            logger.error(f"Error loading constitution: {e}")
+            self.load_error = f"Error loading constitution: {e}"
+            logger.error(self.load_error)
             self.rules = []
 
     def validate(self, operation: str, context: Dict[str, Any]) -> Dict[str, Any]:
@@ -82,6 +95,23 @@ class RulesEngine:
                 - requires_approval: bool
                 - matched_rules: List[str]
         """
+        # Fail closed: without a loaded constitution nothing can be validated.
+        if self.load_error is not None:
+            return {
+                "valid": False,
+                "violations": [
+                    {
+                        "rule_id": "constitution-unavailable",
+                        "severity": "CRITICAL",
+                        "description": self.load_error,
+                        "action": "BLOCK",
+                    }
+                ],
+                "requires_approval": False,
+                "matched_rules": [],
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+
         violations = []
         matched_rules = []
         requires_approval = False

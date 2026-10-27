@@ -226,3 +226,37 @@ class TestAuditLogger:
         assert "previous_hash" in entry
         assert "entry_hash" in entry
         assert entry["previous_hash"] == "GENESIS"
+
+    def test_chain_continues_across_day_boundary(self, temp_dir):
+        """A new day's log file must chain from the previous day's last entry."""
+        audit_dir = temp_dir / "audit_logs"
+        first = AuditLogger(str(audit_dir))
+        first.log_enforcement(operation="Day 1", action="BLOCKED", reason="r")
+        # Simulate the entry having been written on an earlier day.
+        first.current_log_file.rename(audit_dir / "audit_2000-01-01.jsonl")
+
+        second = AuditLogger(str(audit_dir))
+        second.log_enforcement(operation="Day 2", action="BLOCKED", reason="r")
+
+        integrity = second.verify_chain_integrity()
+        assert integrity["valid"] is True, integrity["broken_links"]
+        assert integrity["total_entries"] == 2
+
+    def test_audit_dir_from_env(self, temp_dir, monkeypatch):
+        """ACGS_AUDIT_DIR is used when no directory argument is given."""
+        env_dir = temp_dir / "env_audit"
+        monkeypatch.setenv("ACGS_AUDIT_DIR", str(env_dir))
+
+        logger = AuditLogger()
+
+        assert logger.audit_dir == env_dir
+        assert env_dir.exists()
+
+    def test_audit_dir_argument_overrides_env(self, temp_dir, monkeypatch):
+        """An explicit audit_dir argument wins over ACGS_AUDIT_DIR."""
+        monkeypatch.setenv("ACGS_AUDIT_DIR", str(temp_dir / "env_audit"))
+        explicit = temp_dir / "explicit_audit"
+
+        logger = AuditLogger(str(explicit))
+
+        assert logger.audit_dir == explicit

@@ -10,6 +10,14 @@ from typing import Generator, Dict, Any
 from datetime import datetime
 
 
+@pytest.fixture(autouse=True)
+def isolated_audit_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Route default AuditLogger output to a per-test directory, never the source tree."""
+    audit_dir = tmp_path / "audit_logs"
+    monkeypatch.setenv("ACGS_AUDIT_DIR", str(audit_dir))
+    return audit_dir
+
+
 @pytest.fixture
 def temp_dir() -> Generator[Path, None, None]:
     """Create a temporary directory for test files."""
@@ -30,8 +38,10 @@ metadata:
   description: "Test governance rules"
 
 rules:
+  # Mirrors production no-harmful-actions (harm|kill|destroy|attack|exploit|weaponize)
+  # plus "dangerous", which existing tests rely on. "harm" also covers "harmful".
   - id: test-block-rule
-    pattern: "dangerous|harmful"
+    pattern: "dangerous|harm|kill|destroy|attack|exploit|weaponize"
     severity: CRITICAL
     action: BLOCK
     description: "Block dangerous operations"
@@ -54,10 +64,12 @@ rules:
     validation:
       min_confidence: 0.75
 
+# Unmatched operations are allowed; errors fail closed. Default-deny is a
+# tracked follow-up (mirrors config/governance_rules.yaml).
 enforcement:
-  default_action: BLOCK
+  default_action: ALLOW
   fail_mode: CLOSED
-  require_explicit_allow: true
+  require_explicit_allow: false
 
 audit:
   enabled: true
