@@ -37,9 +37,56 @@ Authorization: Bearer <access token from your IdP>
   **access token**. Roles rank `admin > manager > user > viewer`. A missing or
   unknown role is treated as `viewer`.
 - The claim must be a single top-level string with an exact lowercase value
-  (`"manager"`). `"Admin"`, a list such as `["admin"]`, or a nested claim (e.g.
-  Keycloak `realm_access.roles`) all count as `viewer`. A role placed only in the
-  ID token is never seen by the API, so every user would be read-only.
+  (`"manager"`). Values are not lowercased, trimmed or searched for: `"Admin"`,
+  `" admin"`, a list such as `["admin"]`, an object, `null`, a number or a
+  nested claim all count as `viewer`. A namespaced name such as
+  `https://example.com/role` works if it is a top-level key: set
+  `AUTH_ROLE_CLAIM` to that exact name. A role placed only in the ID token is
+  never seen by the API, so every user would be read-only.
+- The role must come from an assignment the IdP administrator controls for
+  this application (an app role, group or client role), never from a
+  profile attribute users can edit themselves.
+- ID tokens are rejected by audience, not by `typ`: an ID token's `aud` is the
+  SPA client id (or a list containing it), and the token is accepted if
+  `AUTH_JWT_AUDIENCE` appears anywhere in `aud`. So `AUTH_JWT_AUDIENCE` must
+  never appear in the ID token's `aud`; in particular it must not be the SPA
+  client id, or an ID token would be accepted as an access token.
+
+Two different outcomes, do not confuse them:
+
+| Token | Result |
+|---|---|
+| Invalid (bad signature, wrong `iss`, wrong `aud`, expired, ID token, edited payload) | **401** on every protected route, reads included. Never treated as viewer |
+| Valid, but role missing or not an exact recognized string | Authenticated as **viewer**: `GET` works, writes get 403 |
+
+The `role` the web app's auth store exposes comes from the ID token profile
+and grants nothing. Changing it, or anything in browser storage, does not change what the API
+allows; an edited access token fails the signature check (401).
+
+### Verifying the role setup
+
+After configuring the IdP, check both directions with freshly issued tokens
+(sign out and in again after any mapping change; existing tokens keep their
+old claims until they expire):
+
+1. Admin account, edit a scratch task you created for this check:
+   `PUT /api/v1/tasks/{id}` with `{"title": "role check"}` returns **200**;
+   `GET /api/v1/tasks/{id}` then shows the new title.
+2. Viewer account (or one with no role), same edit: returns **403**
+   `{"detail": "Insufficient permissions"}`; `GET` still returns **200** with
+   the title unchanged.
+3. Read the response body before acting on a failure:
+   - 403 `{"detail": "Insufficient permissions"}` on the admin edit: the admin
+     role is not reaching the access token (see above).
+   - 403 `{"detail": "Operation blocked by governance rules", ...}` or
+     **202** `requires human approval`: the role check passed and governance
+     stopped the edit (a 202 means nothing was saved yet). Check
+     `config/governance_rules.yaml`, not the IdP.
+   - 401: the token itself is rejected. Check `AUTH_JWT_ISSUER`,
+     `AUTH_JWT_AUDIENCE` and the key settings, not the role.
+
+The same checks run locally without an IdP in
+`tests/integration/test_api_role_boundary.py`.
 
 ### Configuration
 

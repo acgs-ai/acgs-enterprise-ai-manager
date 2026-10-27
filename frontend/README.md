@@ -81,9 +81,19 @@ The app signs users in through an external OIDC identity provider using Authoriz
    `offline_access` in `VITE_OIDC_SCOPE` if the IdP requires it.
 5. Put the user's role in the **access token** as a top-level string claim named `role` (or whatever the
    backend's `AUTH_ROLE_CLAIM` says), with an exact lowercase value: `viewer`, `user`, `manager` or
-   `admin`. The API never sees the ID token, so a role that exists only there makes every user read-only.
-   `"Admin"`, a list like `["admin"]`, or a nested claim also count as `viewer`. After setup, sign in with
-   a non-admin account and try one edit to confirm.
+   `admin`, derived from an admin-controlled app role or group, not a user-editable profile field. The API
+   never sees the ID token, so a role that exists only there makes every user read-only. `"Admin"`, a list
+   like `["admin"]`, or a nested claim also count as `viewer`. The `role` in the auth store (`store/auth.js`) comes
+   from the ID token profile and grants nothing at the API.
+6. Verify both directions with fresh tokens (sign out and in after changing the mapping):
+   - admin account: edit a scratch task → saved; reload shows the change (API: `PUT` 200, then `GET` shows it);
+   - viewer account: same edit → refused (API: `PUT` 403 `Insufficient permissions`); reload shows the
+     task unchanged.
+
+   A 403 `Insufficient permissions` for the admin means the role is missing from the access token; a
+   governance 403 or 202 (approval required) means the role passed and a governance rule stopped it. A 401 (or a loop back to login)
+   means the token itself is rejected: check issuer, audience and keys, not the role. See
+   `docs/api-reference.md` → "Verifying the role setup".
 
 Tokens live in `sessionStorage` (cleared when the tab closes), never `localStorage`. On a 401 the client
 tries one silent renew, then restarts login with the current route as `returnTo` (same-origin paths only).
