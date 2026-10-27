@@ -8,7 +8,7 @@ pytest-mock==3.17.0
 pytest-xdist==3.8.0  # Parallel test execution
 
 # Code coverage
-coverage[toml]==7.17.0
+coverage[toml]==7.16.2
 
 # Test utilities
 faker==20.1.0  # Generate fake data for tests
