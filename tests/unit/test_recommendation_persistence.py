@@ -131,8 +131,6 @@ def test_db_error_maps_to_500_without_leaking():
 @pytest.mark.unit
 def test_invalid_domain_still_400():
     client, session = make_client("ALLOW")
-    resp = client.post(
-        "/recommendations/generate", json={**PAYLOAD, "domain": "nope"}
-    )
+    resp = client.post("/recommendations/generate", json={**PAYLOAD, "domain": "nope"})
     assert resp.status_code == 400
     session.add.assert_not_called()

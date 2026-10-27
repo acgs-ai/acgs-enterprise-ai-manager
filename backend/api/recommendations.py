@@ -133,7 +133,9 @@ async def generate_recommendation(
             await db.rollback()
             raise
 
-        logger.info(f"Stored recommendation {row.id} for {domain.value}:{request.entity_id}")
+        logger.info(
+            f"Stored recommendation {row.id} for {domain.value}:{request.entity_id}"
+        )
 
         return RecommendationResponse(**{**recommendation, "id": str(row.id)})
 
