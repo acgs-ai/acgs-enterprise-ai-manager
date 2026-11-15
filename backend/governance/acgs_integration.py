@@ -7,23 +7,134 @@ implementing the MACI pattern (Monitor-Approve-Control-Inspect) for AI agent ope
 """
 
 import os
+import re
 import logging
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 from pathlib import Path
 
-try:
-    from acgs_lite import Constitution, GovernanceEngine
-
-    ACGS_AVAILABLE = True
-except ImportError:
-    ACGS_AVAILABLE = False
-    logging.warning("acgs-lite not installed. Install with: pip install acgs-lite")
+import yaml
 
 from .rules_engine import RulesEngine
 from .audit_logger import AuditLogger
 
+# Set when acgs-lite is installed but importing it failed (broken install,
+# missing name, internal import error). Treated as an engine init failure.
+ACGS_IMPORT_ERROR: Optional[str] = None
+try:
+    from acgs_lite import Constitution, GovernanceEngine, ViolationAction
+
+    ACGS_AVAILABLE = True
+except ImportError as e:
+    ACGS_AVAILABLE = False
+    if isinstance(e, ModuleNotFoundError) and e.name == "acgs_lite":
+        logging.warning("acgs-lite not installed. Install with: pip install acgs-lite")
+    else:
+        ACGS_IMPORT_ERROR = f"{type(e).__name__}: {e}"
+        logging.error(f"acgs-lite is installed but failed to import: {e}")
+
 logger = logging.getLogger(__name__)
+
+# App rule action -> acgs-lite workflow action. Only BLOCK blocks in acgs-lite.
+# REQUIRE_APPROVAL, VALIDATE (context thresholds), AUDIT and PROTECT are
+# enforced by RulesEngine; acgs-lite cannot express approval gates or context
+# thresholds, so it only warns on them instead of turning them into blocks.
+_ACGS_WORKFLOW_ACTIONS = {
+    "BLOCK": "block",
+    "REQUIRE_APPROVAL": "warn",
+    "VALIDATE": "warn",
+    "AUDIT": "warn",
+    "PROTECT": "warn",
+}
+_ACGS_SEVERITIES = {
+    "CRITICAL": "critical",
+    "HIGH": "high",
+    "MEDIUM": "medium",
+    "LOW": "low",
+}
+# One alternative of an app pattern that is a plain literal (no regex syntax),
+# so it maps exactly to an acgs-lite keyword (case-insensitive substring).
+_LITERAL_ALTERNATIVE = re.compile(r"[A-Za-z0-9_]+(?:[ \-]+[A-Za-z0-9_]+)*")
+
+# Generic on purpose: violations reach API 403 bodies.
+_ENGINE_UNAVAILABLE_VIOLATION = {
+    "rule_id": "acgs-engine-unavailable",
+    "severity": "CRITICAL",
+    "description": "Governance engine unavailable; operation blocked",
+    "action": "BLOCK",
+}
+
+
+def build_acgs_constitution(constitution_path: str) -> "Constitution":
+    """
+    Convert this app's governance_rules.yaml schema into an acgs-lite Constitution.
+
+    App rules carry ``pattern`` (regex), ``action`` and ``description``;
+    acgs-lite rules need ``text``. Rules are emitted as ``keywords`` (a
+    constitution made only of acgs-lite pattern rules never matches in the
+    pure-Python engine). A pattern maps only if it is an alternation of plain
+    literals ("harm|kill|rm -rf"), which is exactly a keyword list, matched
+    case-insensitively as a substring. Anything that cannot be mapped faithfully
+    (regex syntax, context matching, unknown action/severity, missing pattern)
+    raises, so the caller fails closed instead of dropping the rule.
+    """
+    with open(constitution_path, "r") as f:
+        data = yaml.safe_load(f)
+
+    if not isinstance(data, dict):
+        raise TypeError("constitution must be a YAML mapping")
+    rules = data.get("rules")
+    if not isinstance(rules, list) or not rules:
+        raise ValueError("constitution 'rules' must be a non-empty list")
+
+    acgs_rules = []
+    seen_ids = set()
+    for index, rule in enumerate(rules):
+        if not isinstance(rule, dict):
+            raise TypeError(f"rule at index {index} must be a mapping")
+        rule_id = rule.get("id")
+        if not isinstance(rule_id, str) or not rule_id.strip():
+            raise ValueError(f"rule at index {index} has no valid 'id'")
+        if rule_id in seen_ids:
+            raise ValueError(f"duplicate rule id {rule_id!r}")
+        seen_ids.add(rule_id)
+
+        action = rule.get("action", "BLOCK")
+        if action not in _ACGS_WORKFLOW_ACTIONS:
+            raise ValueError(f"rule {rule_id}: unknown action {action!r}")
+        severity = rule.get("severity", "MEDIUM")
+        if severity not in _ACGS_SEVERITIES:
+            raise ValueError(f"rule {rule_id}: unknown severity {severity!r}")
+        if "context_key" in rule or "context_pattern" in rule:
+            raise ValueError(f"rule {rule_id}: context matching cannot be mapped")
+        pattern = rule.get("pattern")
+        if not isinstance(pattern, str) or not pattern:
+            raise ValueError(f"rule {rule_id}: no pattern to map")
+        keywords = pattern.split("|")
+        if not all(_LITERAL_ALTERNATIVE.fullmatch(k) for k in keywords):
+            raise ValueError(f"rule {rule_id}: pattern is not a literal alternation")
+
+        acgs_rules.append(
+            {
+                "id": rule_id,
+                "text": str(rule.get("description") or rule_id),
+                "severity": _ACGS_SEVERITIES[severity],
+                "keywords": keywords,
+                "workflow_action": ViolationAction(_ACGS_WORKFLOW_ACTIONS[action]),
+                "category": str(rule.get("maci_phase", "general")).lower(),
+                "metadata": {"app_action": action},
+            }
+        )
+
+    return Constitution.from_dict(
+        {
+            "name": "acgs-enterprise-manager",
+            "rules": acgs_rules,
+            "metadata": {
+                "constitutional_hash": str(data.get("constitutional_hash", ""))
+            },
+        }
+    )
 
 
 class ACGSIntegration:
@@ -67,30 +178,37 @@ class ACGSIntegration:
         self.rules_engine = RulesEngine(constitution_path)
         self.audit_logger = AuditLogger(audit_dir) if audit_enabled else None
 
-        # Initialize acgs-lite engine if available
+        # Initialize acgs-lite engine if available. Not installed is a
+        # supported fallback (RulesEngine alone enforces, itself fail-closed);
+        # installed but unbuildable is an error and sets acgs_init_error.
         self.acgs_engine = None
+        self.acgs_init_error: Optional[str] = None
         if ACGS_AVAILABLE:
             self._initialize_acgs_engine()
+        elif ACGS_IMPORT_ERROR is not None:
+            self.acgs_init_error = ACGS_IMPORT_ERROR
+            logger.error(f"ACGS engine unavailable, import failed: {ACGS_IMPORT_ERROR}")
         else:
             logger.warning("Running in fallback mode without acgs-lite")
 
     def _initialize_acgs_engine(self):
         """Initialize the acgs-lite governance engine."""
         try:
-            if not os.path.exists(self.constitution_path):
-                logger.error(f"Constitution file not found: {self.constitution_path}")
-                return
-
-            # Load constitution from YAML file (pass path, not content)
-            constitution = Constitution.from_yaml(self.constitution_path)
-            self.acgs_engine = GovernanceEngine(constitution)
+            constitution = build_acgs_constitution(self.constitution_path)
+            # strict=False: blocking violations come back in the result
+            # instead of raising, so validate_operation reports them.
+            self.acgs_engine = GovernanceEngine(constitution, strict=False)
 
             logger.info(
                 f"ACGS governance engine initialized with constitution: {self.constitution_path}"
             )
         except Exception as e:
-            logger.error(f"Failed to initialize ACGS engine: {e}")
             self.acgs_engine = None
+            self.acgs_init_error = f"{type(e).__name__}: {e}"
+            logger.error(
+                f"Failed to initialize ACGS engine from {self.constitution_path}: "
+                f"{self.acgs_init_error}"
+            )
 
     def validate_operation(
         self, operation: str, context: Dict[str, Any], agent_id: str = "default"
@@ -116,9 +234,11 @@ class ACGSIntegration:
         validation_result = self.rules_engine.validate(operation, context)
 
         # If acgs-lite is available, use it for additional validation
-        if self.acgs_engine:
+        if self.acgs_engine is not None:
             try:
-                acgs_result = self.acgs_engine.validate(operation, agent_id=agent_id)
+                acgs_result = self.acgs_engine.validate(
+                    operation, agent_id=agent_id, context=context
+                )
                 # Merge results (fail-closed: if either fails, operation is blocked)
                 if not acgs_result.valid:
                     validation_result["valid"] = False
@@ -126,8 +246,12 @@ class ACGSIntegration:
                         [
                             {
                                 "rule_id": v.rule_id,
-                                "severity": v.severity,
-                                "description": v.description,
+                                "severity": str(
+                                    getattr(v.severity, "value", v.severity)
+                                ).upper(),
+                                "description": v.rule_text,
+                                "action": "BLOCK",
+                                "source": "acgs-lite",
                             }
                             for v in acgs_result.violations
                         ]
@@ -140,9 +264,26 @@ class ACGSIntegration:
                         {
                             "rule_id": "system-error",
                             "severity": "CRITICAL",
-                            "description": f"Governance validation error: {str(e)}",
+                            # Generic: reaches API 403 bodies; detail is logged.
+                            "description": "Governance validation error; operation blocked",
                         }
                     )
+        elif self.acgs_init_error is not None:
+            # acgs-lite is installed but its engine could not be built: never
+            # treat the missing layer as a pass.
+            if self.fail_closed:
+                logger.error(
+                    "ACGS engine unavailable; blocking operation (fail-closed)"
+                )
+                validation_result["valid"] = False
+                validation_result["violations"].append(
+                    dict(_ENGINE_UNAVAILABLE_VIOLATION)
+                )
+            else:
+                logger.warning(
+                    "ACGS engine unavailable; fail_closed=False, "
+                    "rules engine decides alone"
+                )
 
         # Determine action based on validation
         if not validation_result["valid"]:
@@ -276,6 +417,7 @@ class ACGSIntegration:
         return {
             "acgs_available": ACGS_AVAILABLE,
             "acgs_engine_initialized": self.acgs_engine is not None,
+            "acgs_init_error": self.acgs_init_error is not None,
             "fail_closed": self.fail_closed,
             "audit_enabled": self.audit_enabled,
             "constitution_path": self.constitution_path,
