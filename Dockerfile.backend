@@ -1,0 +1,26 @@
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app
+
+WORKDIR /app
+
+RUN groupadd --system appuser \
+    && useradd --system --gid appuser --no-create-home appuser
+
+COPY backend/requirements.txt ./backend/requirements.txt
+RUN pip install --no-cache-dir -r backend/requirements.txt
+
+COPY backend/ ./backend/
+COPY config/ ./config/
+COPY database/ ./database/
+
+RUN mkdir -p /app/backend/governance/audit_logs \
+    && chown -R appuser:appuser /app/backend/governance/audit_logs
+
+USER appuser
+
+EXPOSE 8001
+
+CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8001"]
