@@ -38,7 +38,9 @@ class RecommendationRequest(BaseModel):
     """Request model for generating a recommendation"""
 
     domain: str = Field(..., description="Domain to generate recommendation for")
-    entity_id: str = Field(..., description="Entity ID to recommend for")
+    entity_id: str = Field(
+        ..., max_length=255, description="Entity ID to recommend for"
+    )
     context: dict = Field(default_factory=dict, description="Additional context data")
 
 
@@ -136,15 +138,6 @@ async def generate_recommendation(
         except Exception:
             await db.rollback()
             raise
-
-        # The row is already committed: a refresh failure must not become a 500
-        # (or a rollback). Fall back to the values we already hold.
-        try:
-            await db.refresh(row)
-        except Exception as e:
-            logger.warning(
-                f"Refresh failed after committing recommendation {row_id}: {e}"
-            )
 
         logger.info(
             f"Stored recommendation {row_id} for {domain.value}:{request.entity_id}"

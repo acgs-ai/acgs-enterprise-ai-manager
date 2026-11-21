@@ -340,3 +340,19 @@ class TestAuditLogger:
         logger = AuditLogger(str(explicit))
 
         assert logger.audit_dir == explicit
+
+    def test_query_audit_trail_continues_past_corrupt_and_invalid_utf8_lines(
+        self, temp_dir
+    ):
+        """A corrupt or non-UTF-8 line must not hide later valid entries in the same file."""
+        audit_dir = temp_dir / "audit_logs"
+        logger_inst = AuditLogger(str(audit_dir))
+        logger_inst.log_enforcement(
+            operation="op-before", action="BLOCKED", reason="r1"
+        )
+        with open(logger_inst.current_log_file, "ab") as f:
+            f.write(b"\xff\xfe bad bytes\n{not json\n")
+        logger_inst.log_enforcement(operation="op-after", action="ALLOWED", reason="r2")
+
+        entries = logger_inst.query_audit_trail(limit=10)
+        assert [e["operation"] for e in entries] == ["op-before", "op-after"]
