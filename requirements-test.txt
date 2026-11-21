@@ -26,7 +26,7 @@ fastapi==0.109.1
 uvicorn==0.24.0
 
 # Linting and formatting (for CI)
-black==24.10.0
+black==26.10.1
 flake8==6.1.0
 mypy==1.7.1
 isort==5.13.2
