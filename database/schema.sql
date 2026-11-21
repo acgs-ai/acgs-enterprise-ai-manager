@@ -17,6 +17,7 @@ CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(255) NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
+    external_subject TEXT,
     role VARCHAR(50) NOT NULL CHECK (role IN ('admin', 'manager', 'user', 'viewer')),
     permissions JSONB DEFAULT '[]'::jsonb,
     team VARCHAR(100),
@@ -314,6 +315,8 @@ CREATE TABLE reports (
 CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_role ON users(role);
 CREATE INDEX idx_users_team ON users(team);
+-- Same name as migration 004, so running it on a fresh schema adds nothing.
+CREATE UNIQUE INDEX idx_users_external_subject ON users(external_subject);
 
 -- Governance Rules indexes
 CREATE INDEX idx_governance_rules_domain ON governance_rules(domain);

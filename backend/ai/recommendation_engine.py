@@ -83,32 +83,44 @@ class RecommendationEngine:
         recommendation["generated_at"] = datetime.utcnow().isoformat()
         recommendation["user_id"] = user_id
 
-        # Governance check if available
-        if self.governance:
-            validation = self.governance.validate_operation(
-                operation=f"generate_recommendation_{domain}",
-                context={
-                    "domain": domain,
-                    "entity_id": entity_id,
-                    "confidence": recommendation.get("confidence", 0),
-                },
-            )
-            recommendation["governance_check"] = validation
-
-            if validation["action"] == "BLOCK":
-                recommendation["status"] = "blocked"
-                recommendation["blocked_reason"] = validation.get("violations", [])
-            elif validation["action"] == "REQUIRE_APPROVAL":
-                recommendation["status"] = "pending_approval"
-            else:
-                recommendation["status"] = "approved"
-        else:
-            recommendation["status"] = "approved"
+        self._apply_output_governance(domain, entity_id, recommendation)
 
         logger.info(
             f"Generated {domain} recommendation for {entity_id}: {recommendation['status']}"
         )
         return recommendation
+
+    def _apply_output_governance(
+        self,
+        domain: RecommendationDomain,
+        entity_id: Optional[str],
+        recommendation: Dict[str, Any],
+    ) -> None:
+        """Validate one generated recommendation (output stage); set its status."""
+        if not self.governance:
+            recommendation["status"] = "approved"
+            return
+
+        validation = self.governance.validate_operation(
+            # .value: stable under Enum formatting changes across Python versions
+            operation=f"generate_recommendation_{domain.value}",
+            context={
+                "domain": domain.value,
+                "entity_id": entity_id,
+                "confidence": recommendation.get("confidence"),
+                "rationale": recommendation.get("rationale"),
+            },
+            stage="output",
+        )
+        recommendation["governance_check"] = validation
+
+        if validation["action"] == "BLOCK":
+            recommendation["status"] = "blocked"
+            recommendation["blocked_reason"] = validation.get("violations", [])
+        elif validation["action"] == "REQUIRE_APPROVAL":
+            recommendation["status"] = "pending_approval"
+        else:
+            recommendation["status"] = "approved"
 
     async def batch_recommend(
         self,
@@ -181,6 +193,8 @@ class RecommendationEngine:
             rec["domain"] = domain
             rec["generated_at"] = datetime.utcnow().isoformat()
             rec["user_id"] = user_id
+            # min_confidence is client-chosen; governance judges every item.
+            self._apply_output_governance(domain, rec.get("entity_id"), rec)
 
         return recommendations
 

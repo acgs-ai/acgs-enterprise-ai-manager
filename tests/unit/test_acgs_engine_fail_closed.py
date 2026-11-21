@@ -190,6 +190,68 @@ class TestEngineInitFailure:
         assert "/private/path" not in violation["description"]
         assert any("secret-validate-detail" in r.getMessage() for r in caplog.records)
 
+    @pytest.mark.parametrize("bad_applies_to", ["[]", '"output"', '["bogus"]'])
+    def test_build_acgs_constitution_rejects_invalid_applies_to(
+        self, temp_dir, bad_applies_to
+    ):
+        path = temp_dir / "bad_stage.yaml"
+        path.write_text(
+            "rules:\n"
+            "  - id: r-out\n"
+            '    pattern: "recommend"\n'
+            "    action: BLOCK\n"
+            f"    applies_to: {bad_applies_to}\n"
+        )
+        with pytest.raises(ValueError, match="invalid applies_to"):
+            acgs_integration.build_acgs_constitution(str(path))
+
+    def test_stub_acgs_layer_respects_applies_to_stage_scoping(
+        self, sample_governance_rules
+    ):
+        """An output-only rule violation from acgs_engine must not block at stage='request'."""
+        from types import SimpleNamespace
+
+        integration = ACGSIntegration(constitution_path=str(sample_governance_rules))
+        integration.rules_engine.validate = lambda op, ctx, **kw: {
+            **ALLOW_ALL,
+            "violations": [],
+        }
+
+        class _StageStubEngine:
+            def validate(self, *args, **kwargs):
+                return SimpleNamespace(
+                    valid=False,
+                    violations=[
+                        SimpleNamespace(
+                            rule_id="r-out",
+                            severity="CRITICAL",
+                            rule_text="Output-only block",
+                        )
+                    ],
+                )
+
+        integration.acgs_engine = _StageStubEngine()
+        integration._acgs_rule_stages = {"r-out": frozenset({"output"})}
+
+        req_res = integration.validate_operation(
+            "recommend", {}, "agent", stage="request"
+        )
+        assert req_res["valid"] is True
+        assert req_res["action"] == "ALLOW"
+        assert req_res["violations"] == []
+
+        out_res = integration.validate_operation(
+            "recommend", {}, "agent", stage="output"
+        )
+        assert out_res["valid"] is False
+        assert out_res["action"] == "BLOCK"
+        assert [v["rule_id"] for v in out_res["violations"]] == ["r-out"]
+
+        all_res = integration.validate_operation("recommend", {}, "agent")
+        assert all_res["valid"] is False
+        assert all_res["action"] == "BLOCK"
+        assert [v["rule_id"] for v in all_res["violations"]] == ["r-out"]
+
 
 @pytest.mark.unit
 @pytest.mark.governance
@@ -382,3 +444,45 @@ class TestRealEngine:
         assert integration.acgs_engine is None
         result = integration.validate_operation("List all users", {}, "agent")
         assert result["action"] == "BLOCK"
+
+    def test_real_acgs_layer_respects_applies_to_stage_scoping(self, temp_dir):
+        """Real Constitution preserves applies_to metadata and filters request vs output."""
+        path = temp_dir / "stage_rules.yaml"
+        path.write_text(
+            "rules:\n"
+            "  - id: output-only-block\n"
+            '    pattern: "recommend"\n'
+            "    severity: HIGH\n"
+            "    action: BLOCK\n"
+            '    description: "Output-only block"\n'
+            "    applies_to: [output]\n"
+        )
+        constitution = acgs_integration.build_acgs_constitution(str(path))
+        assert constitution.rules[0].metadata["applies_to"] == ["output"]
+
+        integration = ACGSIntegration(constitution_path=str(path))
+        integration.rules_engine.validate = lambda op, ctx, **kw: {
+            **ALLOW_ALL,
+            "violations": [],
+        }
+
+        req_res = integration.validate_operation(
+            "recommend upgrade", {}, "agent", stage="request"
+        )
+        assert req_res["valid"] is True
+        assert req_res["action"] == "ALLOW"
+        assert req_res["violations"] == []
+
+        out_res = integration.validate_operation(
+            "recommend upgrade", {}, "agent", stage="output"
+        )
+        assert out_res["valid"] is False
+        assert out_res["action"] == "BLOCK"
+        assert any(
+            v.get("source") == "acgs-lite" and v["rule_id"] == "output-only-block"
+            for v in out_res["violations"]
+        )
+
+        unscoped_res = integration.validate_operation("recommend upgrade", {}, "agent")
+        assert unscoped_res["valid"] is False
+        assert unscoped_res["action"] == "BLOCK"

@@ -197,10 +197,12 @@ async def batch_generate_recommendations(
 
         logger.info(f"Generated {len(recommendations)} recommendations for {domain}")
 
+        # Governance-blocked items are dropped entirely: no suggestion or
+        # violation text reaches the client (as /generate returns 403).
         return [
             RecommendationResponse(**rec)
             for rec in recommendations
-            if rec.get("status") != "error"
+            if rec.get("status") not in ("error", "blocked")
         ]
 
     except Exception as e:
@@ -247,7 +249,11 @@ async def get_top_recommendations(
             domain=domain_enum, limit=limit, min_confidence=min_confidence
         )
 
-        return [RecommendationResponse(**rec) for rec in recommendations]
+        return [
+            RecommendationResponse(**rec)
+            for rec in recommendations
+            if rec.get("status") != "blocked"
+        ]
 
     except Exception as e:
         logger.error(f"Failed to get top recommendations: {e}", exc_info=True)

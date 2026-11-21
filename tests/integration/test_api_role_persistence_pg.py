@@ -16,7 +16,6 @@ import asyncio
 import os
 import uuid
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -25,16 +24,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.pool import NullPool
 
 import backend.database as database
-import backend.middleware.governance_interceptor as governance_interceptor
 from backend.database import get_db
 from backend.main import app
-from tests.integration.test_api_auth import (  # noqa: F401  (fixtures)
-    _MISSING,
-    _bearer,
-    auth_env,
-    make_token,
-    rsa_keys,
-)
+from tests.integration._auth_helpers import _MISSING, _bearer
 
 DATABASE_URL_ENV = "ACGS_TEST_DATABASE_URL"
 MIGRATIONS = sorted(
@@ -46,6 +38,7 @@ NEW_TITLE = "edited by an authorized caller"
 pytestmark = [
     pytest.mark.integration,
     pytest.mark.requires_db,
+    pytest.mark.usefixtures("allow_governance"),
     pytest.mark.skipif(
         not os.environ.get(DATABASE_URL_ENV),
         reason=f"set {DATABASE_URL_ENV} to run against PostgreSQL",
@@ -104,20 +97,8 @@ def pg_url():
         _run(teardown())
 
 
-@pytest.fixture(autouse=True)
-def allow_governance(monkeypatch):
-    governance = MagicMock()
-    governance.validate_operation.return_value = {
-        "action": "ALLOW",
-        "violations": [],
-        "decision_id": "d-test",
-    }
-    monkeypatch.setattr(governance_interceptor, "get_governance", lambda: governance)
-    return governance
-
-
 @pytest.fixture
-def client(auth_env, pg_url, monkeypatch):  # noqa: F811
+def client(auth_env, pg_url, monkeypatch):
     # The real get_db, bound to the throwaway database. NullPool: TestClient
     # may run each request on a new event loop, so connections are not reused.
     engine = create_async_engine(pg_url, poolclass=NullPool)
@@ -166,14 +147,14 @@ def _edit(client, task_id, token):
     )
 
 
-def test_admin_edit_is_persisted(client, make_token, pg_url, task_id):  # noqa: F811
+def test_admin_edit_is_persisted(client, make_token, pg_url, task_id):
     response = _edit(client, task_id, make_token(role="admin"))
 
     assert response.status_code == 200, response.text
     assert _row(pg_url, task_id)["title"] == NEW_TITLE
 
 
-def test_admin_delete_is_persisted(client, make_token, pg_url, task_id):  # noqa: F811
+def test_admin_delete_is_persisted(client, make_token, pg_url, task_id):
     response = client.delete(
         f"/api/v1/tasks/{task_id}", headers=_bearer(make_token(role="admin"))
     )
@@ -188,7 +169,7 @@ def test_admin_delete_is_persisted(client, make_token, pg_url, task_id):  # noqa
     ids=["viewer", "missing", "Admin", "list"],
 )
 def test_viewer_edit_and_delete_leave_row_unchanged(
-    client, make_token, pg_url, task_id, allow_governance, role  # noqa: F811
+    client, make_token, pg_url, task_id, allow_governance, role
 ):
     before = _row(pg_url, task_id)
     token = make_token(role=role)

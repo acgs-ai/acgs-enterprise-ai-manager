@@ -23,7 +23,6 @@ import { ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/store/auth'
 import { isOidcConfigured } from '@/auth/oidc'
-import { sanitizeReturnTo } from '@/auth/returnTo'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -38,7 +37,8 @@ const handleLogin = async () => {
   error.value = ''
   loading.value = true
   try {
-    await authStore.login(sanitizeReturnTo(route.query.returnTo))
+    // The store sanitises returnTo; it is the single choke point.
+    await authStore.login(route.query.returnTo)
   } catch (e) {
     loading.value = false
     error.value = e?.message || 'Could not start sign in'

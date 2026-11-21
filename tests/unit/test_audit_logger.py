@@ -5,9 +5,22 @@ Tests tamper-evident logging and chain integrity.
 
 import pytest
 import json
-from pathlib import Path
-from datetime import datetime
-from backend.governance.audit_logger import AuditLogger
+import logging
+import multiprocessing
+import os
+from backend.governance.audit_logger import (
+    HEAD_FILE_NAME,
+    LOCK_FILE_NAME,
+    AuditLogger,
+)
+
+
+def _concurrent_writer(audit_dir: str, worker: int, count: int, start) -> None:
+    """Separate-process writer: logger created first, then all start together."""
+    audit = AuditLogger(audit_dir)
+    assert start.wait(timeout=60)
+    for i in range(count):
+        audit.log_enforcement(operation=f"w{worker}-{i}", action="BLOCKED", reason="r")
 
 
 @pytest.mark.unit
@@ -294,7 +307,7 @@ class TestAuditLogger:
         assert integrity["broken_links"]
 
     def test_corrupt_last_file_seeds_from_previous_file(self, temp_dir):
-        """If the newest daily file has no valid entry, use the previous file."""
+        """A newest daily file with no valid entry does not move the head anchor."""
         audit_dir = temp_dir / "audit_logs"
         first = AuditLogger(str(audit_dir))
         good_hash = first.log_enforcement(operation="op", action="BLOCKED", reason="r")
@@ -321,6 +334,212 @@ class TestAuditLogger:
         assert integrity["total_entries"] == 2
         assert [link.get("type") for link in integrity["broken_links"]] == ["malformed"]
         assert integrity["broken_links"][0]["line"] == 2
+
+    def test_torn_last_line_is_not_glued_to_next_entry(self, temp_dir):
+        """A fragment without a newline is terminated before the next entry."""
+        audit_dir = temp_dir / "audit_logs"
+        first = AuditLogger(str(audit_dir))
+        first.log_enforcement(operation="op", action="BLOCKED", reason="r")
+        with open(first.current_log_file, "a") as f:
+            f.write('{"type": "DECISION", "torn')
+
+        second = AuditLogger(str(audit_dir))
+        decision_id = second.log_decision(
+            operation="after crash",
+            context={},
+            validation_result={"valid": True, "action": "ALLOW"},
+            agent_id="agent_after",
+            duration_ms=1.0,
+        )
+
+        lines = second.current_log_file.read_text().splitlines()
+        assert len(lines) == 3
+        assert lines[1] == '{"type": "DECISION", "torn'
+        last = json.loads(lines[-1])
+        assert last["entry_hash"] == decision_id
+        found = second.query_audit_trail(agent_id="agent_after")
+        assert [e["entry_hash"] for e in found] == [decision_id]
+
+        integrity = second.verify_chain_integrity()
+        assert integrity["total_entries"] == 2
+        assert [link.get("type") for link in integrity["broken_links"]] == ["malformed"]
+        assert integrity["broken_links"][0]["line"] == 2
+
+    def test_concurrent_processes_extend_one_chain(self, temp_dir):
+        """4 separate processes x 50 writes on one directory form one valid chain."""
+        audit_dir = temp_dir / "audit_logs"
+        ctx = multiprocessing.get_context("spawn")
+        start = ctx.Event()
+        procs = [
+            ctx.Process(target=_concurrent_writer, args=(str(audit_dir), w, 50, start))
+            for w in range(4)
+        ]
+        for proc in procs:
+            proc.start()
+        try:
+            start.set()
+        finally:
+            for proc in procs:
+                proc.join(timeout=120)
+        assert [proc.exitcode for proc in procs] == [0, 0, 0, 0]
+
+        integrity = AuditLogger(str(audit_dir)).verify_chain_integrity()
+        assert integrity["valid"] is True, integrity["broken_links"][:3]
+        assert integrity["total_entries"] == 200
+        head = json.loads((audit_dir / HEAD_FILE_NAME).read_text())
+        assert head["entries"] == 200
+
+    def test_deleted_newest_file_is_detected_via_head_anchor(self, temp_dir):
+        """Deleting the newest file no longer reseeds silently from the older one."""
+        audit_dir = temp_dir / "audit_logs"
+        first = AuditLogger(str(audit_dir))
+        old_hash = first.log_enforcement(operation="old", action="BLOCKED", reason="r")
+        first.current_log_file.rename(audit_dir / "audit_2000-01-01.jsonl")
+        newest_hash = first.log_enforcement(
+            operation="new", action="BLOCKED", reason="r"
+        )
+        first.current_log_file.unlink()
+
+        second = AuditLogger(str(audit_dir))
+        assert second.last_hash == newest_hash
+
+        integrity = second.verify_chain_integrity()
+        assert integrity["valid"] is False
+        assert integrity["broken_links"] == [
+            {
+                "type": "head_mismatch",
+                "expected_head": newest_hash,
+                "actual_head": old_hash,
+                "expected_entries": 2,
+                "actual_entries": 1,
+            }
+        ]
+
+        # The next entry chains to the anchor, so the gap stays visible.
+        second.log_enforcement(operation="after", action="BLOCKED", reason="r")
+        entries = second.query_audit_trail()
+        assert entries[-1]["previous_hash"] == newest_hash
+        assert second.verify_chain_integrity()["valid"] is False
+
+    def test_crash_between_append_and_anchor_update_recovers(
+        self, temp_dir, monkeypatch
+    ):
+        """An appended entry whose anchor update failed is adopted on restart."""
+        audit_dir = temp_dir / "audit_logs"
+        first = AuditLogger(str(audit_dir))
+        first.log_enforcement(operation="one", action="BLOCKED", reason="r")
+
+        def _crash(*args, **kwargs):
+            raise OSError("simulated crash before anchor update")
+
+        monkeypatch.setattr(first, "_write_head", _crash)
+        with pytest.raises(OSError):
+            first.log_enforcement(operation="two", action="BLOCKED", reason="r")
+        orphan = json.loads(first.current_log_file.read_text().splitlines()[-1])
+        head = json.loads((audit_dir / HEAD_FILE_NAME).read_text())
+        assert head["entries"] == 1
+        assert orphan["previous_hash"] == head["entry_hash"]
+
+        second = AuditLogger(str(audit_dir))
+        assert second.last_hash == orphan["entry_hash"]
+        assert json.loads((audit_dir / HEAD_FILE_NAME).read_text()) == {
+            "entry_hash": orphan["entry_hash"],
+            "entries": 2,
+        }
+        second.log_enforcement(operation="three", action="BLOCKED", reason="r")
+        integrity = second.verify_chain_integrity()
+        assert integrity["valid"] is True, integrity["broken_links"]
+        assert integrity["total_entries"] == 3
+
+    def test_missing_anchor_is_bootstrapped_from_disk(self, temp_dir, caplog):
+        """Upgrade path: existing logs without an anchor seed it with a warning."""
+        audit_dir = temp_dir / "audit_logs"
+        first = AuditLogger(str(audit_dir))
+        for i in range(3):
+            last = first.log_enforcement(
+                operation=f"op{i}", action="BLOCKED", reason="r"
+            )
+        (audit_dir / HEAD_FILE_NAME).unlink()
+
+        with caplog.at_level(logging.WARNING, logger="backend.governance.audit_logger"):
+            second = AuditLogger(str(audit_dir))
+
+        assert second.last_hash == last
+        assert json.loads((audit_dir / HEAD_FILE_NAME).read_text()) == {
+            "entry_hash": last,
+            "entries": 3,
+        }
+        assert any("bootstrapped" in r.getMessage() for r in caplog.records)
+        assert second.verify_chain_integrity()["valid"] is True
+
+    def test_missing_anchor_with_entries_fails_verification(self, temp_dir):
+        """verify_chain_integrity flags a deleted anchor when entries exist."""
+        audit_dir = temp_dir / "audit_logs"
+        audit = AuditLogger(str(audit_dir))
+        audit.log_enforcement(operation="op", action="BLOCKED", reason="r")
+        (audit_dir / HEAD_FILE_NAME).unlink()
+
+        integrity = audit.verify_chain_integrity()
+        assert integrity["valid"] is False
+        assert [link["type"] for link in integrity["broken_links"]] == ["head_mismatch"]
+
+    def test_corrupt_anchor_fails_closed(self, temp_dir):
+        """A corrupt anchor makes writes raise instead of reseeding the chain."""
+        audit_dir = temp_dir / "audit_logs"
+        audit = AuditLogger(str(audit_dir))
+        audit.log_enforcement(operation="op", action="BLOCKED", reason="r")
+        (audit_dir / HEAD_FILE_NAME).write_text("{not json")
+
+        with pytest.raises(ValueError, match="anchor is corrupt"):
+            audit.log_enforcement(operation="op2", action="BLOCKED", reason="r")
+        integrity = audit.verify_chain_integrity()
+        assert integrity["valid"] is False
+        assert integrity["total_entries"] == 1
+
+    def test_anchor_write_does_not_follow_planted_symlink(self, temp_dir):
+        """A symlink planted under a guessable temp name is never written through."""
+        audit_dir = temp_dir / "audit_logs"
+        audit = AuditLogger(str(audit_dir))
+        victim = temp_dir / "victim.txt"
+        victim.write_text("untouched")
+        # The name the anchor temp file had when it was derived from the pid.
+        (audit_dir / f".{HEAD_FILE_NAME}.{os.getpid()}.tmp").symlink_to(victim)
+
+        audit.log_enforcement(operation="op", action="BLOCKED", reason="r")
+
+        assert victim.read_text() == "untouched"
+        assert audit.verify_chain_integrity()["valid"] is True
+        leftovers = [
+            p.name
+            for p in audit_dir.iterdir()
+            if p.name.endswith(".tmp") and not p.is_symlink()
+        ]
+        assert leftovers == []
+
+    def test_lock_file_symlink_is_refused(self, temp_dir):
+        """A symlink planted under the lock name makes writes fail closed."""
+        audit_dir = temp_dir / "audit_logs"
+        audit = AuditLogger(str(audit_dir))
+        victim = temp_dir / "victim.txt"
+        victim.write_text("untouched")
+        (audit_dir / LOCK_FILE_NAME).unlink()
+        (audit_dir / LOCK_FILE_NAME).symlink_to(victim)
+
+        with pytest.raises(OSError):
+            audit.log_enforcement(operation="op", action="BLOCKED", reason="r")
+        assert victim.read_text() == "untouched"
+
+    def test_daily_file_symlink_is_refused(self, temp_dir):
+        """A symlink planted under today's file name never receives entries."""
+        audit_dir = temp_dir / "audit_logs"
+        audit = AuditLogger(str(audit_dir))
+        victim = temp_dir / "victim.txt"
+        victim.write_text("untouched")
+        audit.current_log_file.symlink_to(victim)
+
+        with pytest.raises(OSError):
+            audit.log_enforcement(operation="op", action="BLOCKED", reason="r")
+        assert victim.read_text() == "untouched"
 
     def test_audit_dir_from_env(self, temp_dir, monkeypatch):
         """ACGS_AUDIT_DIR is used when no directory argument is given."""

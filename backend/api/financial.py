@@ -4,6 +4,7 @@ REST API for Financial Record CRUD operations with approval workflow
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 from uuid import UUID
@@ -12,7 +13,9 @@ from decimal import Decimal
 import logging
 import math
 
+from backend.auth.dependencies import get_current_user
 from backend.database import get_db
+from backend.models.user import User
 from backend.services.financial_service import FinancialService
 from backend.schemas.financial_record import (
     FinancialRecordCreate,
@@ -135,13 +138,36 @@ async def delete_financial_record(record_id: UUID, db: AsyncSession = Depends(ge
     logger.info(f"Deleted financial record: {record_id}")
 
 
+async def _resolve_approver(db: AsyncSession, user: dict) -> UUID:
+    """The approver is the verified token subject, never a client-supplied id.
+
+    Requires exactly one active user with ``users.external_subject == sub``
+    (``sub`` is an opaque string); anything else is 403 with no fallback.
+    """
+    sub = user.get("id")
+    rows = []
+    if isinstance(sub, str) and sub:
+        result = await db.execute(
+            select(User).where(User.external_subject == sub).limit(2)
+        )
+        rows = result.scalars().all()
+    if len(rows) != 1 or not rows[0].is_active:
+        logger.warning("Approver identity not provisioned for sub %r", sub)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Approver identity not provisioned",
+        )
+    return rows[0].id
+
+
 @router.post("/{record_id}/approve", response_model=FinancialRecordResponse)
 async def approve_financial_record(
     record_id: UUID,
-    approver_id: UUID = Query(..., description="Approver user ID"),
     db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
-    """Approve a financial record."""
+    """Approve a financial record as the authenticated user."""
+    approver_id = await _resolve_approver(db, user)
     record = await FinancialService.approve_financial_record(db, record_id, approver_id)
     if not record:
         raise HTTPException(
@@ -155,10 +181,11 @@ async def approve_financial_record(
 @router.post("/{record_id}/reject", response_model=FinancialRecordResponse)
 async def reject_financial_record(
     record_id: UUID,
-    approver_id: UUID = Query(..., description="Approver user ID"),
     db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
-    """Reject a financial record."""
+    """Reject a financial record as the authenticated user."""
+    approver_id = await _resolve_approver(db, user)
     record = await FinancialService.reject_financial_record(db, record_id, approver_id)
     if not record:
         raise HTTPException(

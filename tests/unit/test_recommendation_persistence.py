@@ -33,7 +33,7 @@ class StubGovernance:
     def __init__(self, action):
         self.action = action
 
-    def validate_operation(self, operation, context):
+    def validate_operation(self, operation, context, stage=None):
         return {"action": self.action, "violations": ["secret-rule-detail"]}
 
 

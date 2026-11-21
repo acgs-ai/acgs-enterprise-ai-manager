@@ -210,6 +210,34 @@ error details go to `load_error` and the log, never to API responses):
 - a rule is not a mapping, or lacks a non-empty string `id`, or reuses an `id`
 - a rule has an unknown `action` (e.g. `BLOK`)
 - a rule's `pattern` or `context_pattern` is not a valid regex
+- a rule has a key outside the allowlist (e.g. a `patern:` typo), or a
+  `validation` key the engine does not implement
+- a rule has neither `pattern` nor `context_key`, or only one of `context_key`
+  and `context_pattern`
+- `validation` is missing, empty or not a mapping on a `VALIDATE` rule, or is
+  present on any other action
+- a validation threshold is not a finite number, or `applies_to` is not a
+  non-empty list drawn from `request` and `output`
+
+Implemented validation keys: `min_confidence`, `max_amount`,
+`require_approval_above`, `max_batch_size`, `min_retention_days`,
+`max_retention_days`, `require_explanation`. A check whose context value is
+missing or not a number blocks the operation; it does not default to zero.
+
+`applies_to` limits a rule to a stage. The HTTP middleware validates at the
+`request` stage; each generated recommendation is validated at the `output`
+stage. A rule without `applies_to` runs at both, a call without a stage runs
+every rule, and an unknown stage blocks.
+
+### Audit chain files
+
+Each audit write holds an exclusive `flock` on `.audit.lock` in the audit
+directory and chains to `chain_head.json`, so several worker processes extend
+one chain. `verify_chain_integrity()` reports a `head_mismatch` link when the
+log files and the anchor disagree (for example after the newest daily file is
+deleted). Limits: `flock` is reliable only on a local Linux filesystem, the
+audit directory must be writable, and an attacker who can rewrite or delete
+both the logs and the anchor is not detected.
 
 ### acgs-lite Layer
 
@@ -221,6 +249,9 @@ reports a blocking violation, the operation is blocked.
 - `BLOCK` rules become acgs-lite `block` rules. `REQUIRE_APPROVAL`, `VALIDATE`,
   `AUDIT` and `PROTECT` become `warn`: RulesEngine enforces them, and acgs-lite
   cannot express approval gates or context thresholds.
+- `applies_to` stage scoping (`request` / `output`) applies to the acgs-lite
+  layer as well: violations from rules scoped to another stage are filtered out
+  when `validate_operation(..., stage=...)` runs.
 - A `pattern` maps only if it is an alternation of plain literals
   (`harm|kill|rm -rf`), which becomes the keyword list. acgs-lite's heuristics
   can skip a keyword hit (e.g. when the action starts with "run" or

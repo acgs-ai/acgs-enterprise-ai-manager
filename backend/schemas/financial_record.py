@@ -28,12 +28,6 @@ class FinancialRecordBase(BaseModel):
         ..., min_length=1, max_length=100, description="Financial category"
     )
     project_id: Optional[UUID] = Field(None, description="Associated project ID")
-    approval_status: str = Field(
-        default="pending",
-        pattern="^(pending|approved|rejected)$",
-        description="Approval status",
-    )
-    approved_by: Optional[UUID] = Field(None, description="Approver user ID")
     description: Optional[str] = Field(None, description="Transaction description")
     additional_data: Optional[Dict[str, Any]] = Field(
         None, description="Additional metadata"
@@ -41,13 +35,24 @@ class FinancialRecordBase(BaseModel):
 
 
 class FinancialRecordCreate(FinancialRecordBase):
-    """Schema for creating a new financial record."""
+    """Schema for creating a new financial record.
 
-    pass
+    approval_status / approved_by are not accepted (422): a new record is
+    always pending, and only the approve/reject endpoints set them, from the
+    verified token.
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class FinancialRecordUpdate(BaseModel):
-    """Schema for updating a financial record (all fields optional)."""
+    """Schema for updating a financial record (all fields optional).
+
+    approval_status / approved_by are not accepted (422); see
+    FinancialRecordCreate.
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     type: Optional[str] = Field(
         None, pattern="^(expense|revenue|budget_allocation|invoice|payment)$"
@@ -57,10 +62,6 @@ class FinancialRecordUpdate(BaseModel):
     date: Optional[DateType] = None
     category: Optional[str] = Field(None, min_length=1, max_length=100)
     project_id: Optional[UUID] = None
-    approval_status: Optional[str] = Field(
-        None, pattern="^(pending|approved|rejected)$"
-    )
-    approved_by: Optional[UUID] = None
     description: Optional[str] = None
     additional_data: Optional[Dict[str, Any]] = None
 
@@ -68,6 +69,12 @@ class FinancialRecordUpdate(BaseModel):
 class FinancialRecordResponse(FinancialRecordBase):
     """Schema for financial record response."""
 
+    approval_status: str = Field(
+        default="pending",
+        pattern="^(pending|approved|rejected)$",
+        description="Approval status",
+    )
+    approved_by: Optional[UUID] = Field(None, description="Approver user ID")
     id: UUID
     created_at: datetime
     updated_at: datetime

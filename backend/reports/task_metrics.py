@@ -10,10 +10,10 @@ from typing import Dict, Any, Optional, List
 import logging
 
 from backend.models.task import Task
+from backend.schemas.task import TASK_STATUS_CANCELLED, TASK_STATUS_DONE
 
-# Task status values come from backend/schemas/task.py ("done", not "completed").
-DONE_STATUS = "done"
-CLOSED_STATUSES = ("done", "cancelled")  # never counted as overdue
+DONE_STATUS = TASK_STATUS_DONE
+CLOSED_STATUSES = (TASK_STATUS_DONE, TASK_STATUS_CANCELLED)  # never overdue
 
 logger = logging.getLogger(__name__)
 

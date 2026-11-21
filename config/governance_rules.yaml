@@ -38,9 +38,8 @@ rules:
     description: "Require human approval for data deletion operations"
     maci_phase: APPROVE
     approval_required: true
-    approvers:
-      - role: "admin"
-      - role: "data_steward"
+    # "approvers" (admin, data_steward) removed: nothing enforced approver
+    # roles. Candidate feature, tracked as an open question.
 
   # === HIGH SEVERITY RULES ===
   - id: financial-transaction-limit
@@ -75,6 +74,9 @@ rules:
     action: VALIDATE
     description: "AI recommendations must meet confidence threshold"
     maci_phase: CONTROL
+    # Judges a generated recommendation, so it cannot run at the request
+    # stage (no recommendation exists yet). Enforced on each output.
+    applies_to: [output]
     validation:
       min_confidence: 0.75
       require_explanation: true
@@ -94,7 +96,8 @@ rules:
     maci_phase: CONTROL
     validation:
       max_batch_size: 1000
-      require_preview: true
+      # "require_preview" removed: no preview/dry-run workflow exists, so it
+      # was never enforced. Candidate feature, tracked as an open question.
 
   # === COMPLIANCE RULES ===
   - id: data-retention-policy
@@ -113,12 +116,15 @@ rules:
     action: PROTECT
     description: "Protect audit trail integrity"
     maci_phase: INSPECT
-    immutable: true
+    # "immutable" removed: PROTECT only records a match; nothing enforced
+    # immutability. Candidate feature, tracked as an open question.
 
   - id: access-control-validation
     pattern: "access|permission|role|grant"
     severity: HIGH
-    action: VALIDATE
+    # Was VALIDATE with no validation block (an effective no-op). The loader
+    # now rejects that; REQUIRE_APPROVAL is the stricter replacement.
+    action: REQUIRE_APPROVAL
     description: "Validate access control changes"
     maci_phase: CONTROL
 
@@ -130,7 +136,8 @@ rules:
     description: "AI autonomous operations require governance gate approval"
     maci_phase: APPROVE
     approval_required: true
-    governance_gate: true
+    # "governance_gate" removed: it restated REQUIRE_APPROVAL and was never
+    # read by the engine.
 
   - id: ai-learning-feedback
     pattern: "learn|train|feedback|model_update"
@@ -145,6 +152,7 @@ rules:
     action: VALIDATE
     description: "Enforce minimum confidence thresholds"
     maci_phase: CONTROL
+    applies_to: [output]
     validation:
       min_confidence: 0.70
 
