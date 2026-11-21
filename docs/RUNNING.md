@@ -38,9 +38,10 @@ The backend **only verifies** bearer JWT access tokens issued by an external OID
   2. Configure `VITE_OIDC_AUTHORITY`, `VITE_OIDC_CLIENT_ID`, and optional `VITE_OIDC_*` variables in `.env`. See [`frontend/.env.example`](../frontend/.env.example) and [`frontend/README.md`](../frontend/README.md).
   3. Rebuild the frontend image after changing any `VITE_*` variable (`docker compose up -d --build frontend`), because Vite embeds `VITE_*` values and the CSP `connect-src` origin (via `frontend/vite.config.js`) at build time.
 
-## Database Notes
+## Database Notes & Persistent Volumes
 
-- `db` uses `postgres:16-alpine` with a named volume `pgdata` and defaults `POSTGRES_USER=postgres`, `POSTGRES_PASSWORD=postgres`, `POSTGRES_DB=acgs_manager` (override in `.env`).
+- `db` uses `postgres:16-alpine` with a named volume `pgdata` and defaults `POSTGRES_USER=postgres`, `POSTGRES_PASSWORD=postgres`, `POSTGRES_DB=acgs_manager` (override in `.env`). `docker-entrypoint.py` URL-encodes Postgres credentials via SQLAlchemy `URL.create()` so `POSTGRES_PASSWORD` values containing URL delimiters (`@`, `/`, `#`, `:`, `%`) connect cleanly.
+- `api` mounts a named volume `audit_logs` at `/app/backend/governance/audit_logs` (`ACGS_AUDIT_DIR`) so hash-chained JSONL governance audit logs survive container restarts and recreations.
 - On first initialization (when `pgdata` is empty), Postgres runs:
   - `database/schema.sql` mounted as `/docker-entrypoint-initdb.d/01-schema.sql` (which already incorporates migrations `001` through `003`)
   - `database/indexes.sql` mounted as `/docker-entrypoint-initdb.d/02-indexes.sql`
@@ -49,13 +50,13 @@ The backend **only verifies** bearer JWT access tokens issued by an external OID
 
 ## Teardown
 
-Stop containers and keep the `pgdata` database volume:
+Stop containers and keep the `pgdata` and `audit_logs` volumes:
 
 ```bash
 docker compose down
 ```
 
-Stop containers and remove the `pgdata` volume plus locally built images:
+Stop containers and remove the `pgdata` and `audit_logs` volumes plus locally built images:
 
 ```bash
 docker compose down -v --rmi local

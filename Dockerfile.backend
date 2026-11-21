@@ -15,6 +15,7 @@ RUN pip install --no-cache-dir -r backend/requirements.txt
 COPY backend/ ./backend/
 COPY config/ ./config/
 COPY database/ ./database/
+COPY docker-entrypoint.py ./docker-entrypoint.py
 
 RUN mkdir -p /app/backend/governance/audit_logs \
     && chown -R appuser:appuser /app/backend/governance/audit_logs
@@ -23,4 +24,4 @@ USER appuser
 
 EXPOSE 8001
 
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8001"]
+CMD ["python", "/app/docker-entrypoint.py"]
