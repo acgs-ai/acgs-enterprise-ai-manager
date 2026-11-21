@@ -87,7 +87,7 @@ def test_stored_row_fields():
     assert row.governance_check["action"] == "ALLOW"
     assert row.generated_at is not None
     session.commit.assert_awaited_once()
-    session.refresh.assert_awaited_once_with(row)
+    session.refresh.assert_not_awaited()
 
 
 @pytest.mark.unit
@@ -178,18 +178,29 @@ def test_bad_engine_generated_at_is_not_a_400():
 
 
 @pytest.mark.unit
-def test_refresh_failure_after_commit_still_returns_201(caplog):
+def test_refresh_failure_after_commit_still_returns_201():
     session = make_session()
     session.refresh.side_effect = RuntimeError("refresh blew up")
     client, _ = make_client("ALLOW", session)
-    with caplog.at_level("WARNING", logger=api.logger.name):
-        resp = client.post("/recommendations/generate", json=PAYLOAD)
+    resp = client.post("/recommendations/generate", json=PAYLOAD)
     assert resp.status_code == 201
     row = session.add.call_args.args[0]
     assert resp.json()["id"] == str(row.id)
     session.commit.assert_awaited_once()
+    session.refresh.assert_not_awaited()
     session.rollback.assert_not_awaited()
-    assert any("Refresh failed" in r.message for r in caplog.records)
+
+
+@pytest.mark.unit
+def test_entity_id_over_255_chars_rejected_with_422():
+    client, session = make_client("ALLOW")
+    resp = client.post(
+        "/recommendations/generate",
+        json={**PAYLOAD, "entity_id": "x" * 256},
+    )
+    assert resp.status_code == 422
+    session.add.assert_not_called()
+    session.commit.assert_not_awaited()
 
 
 @pytest.mark.unit

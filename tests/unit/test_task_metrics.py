@@ -10,6 +10,8 @@ from sqlalchemy.dialects import postgresql
 
 from backend.reports.task_metrics import TaskMetrics
 
+pytestmark = pytest.mark.unit
+
 
 def _db():
     db = AsyncMock()

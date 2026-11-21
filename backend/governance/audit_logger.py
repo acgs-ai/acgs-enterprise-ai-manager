@@ -300,7 +300,21 @@ class AuditLogger:
                         if len(results) >= limit:
                             break
 
-                        entry = json.loads(line)
+                        try:
+                            entry = json.loads(line)
+                            if not isinstance(entry, dict):
+                                raise TypeError("Audit log entry is not a JSON object")
+                            entry_time = datetime.fromisoformat(entry["timestamp"])
+                        except (
+                            json.JSONDecodeError,
+                            KeyError,
+                            TypeError,
+                            ValueError,
+                        ) as e:
+                            logger.warning(
+                                f"Skipping malformed audit entry in {log_file}: {e}"
+                            )
+                            continue
 
                         # Apply filters
                         if agent_id and entry.get("agent_id") != agent_id:
@@ -308,8 +322,6 @@ class AuditLogger:
 
                         if entry_type and entry.get("type") != entry_type:
                             continue
-
-                        entry_time = datetime.fromisoformat(entry["timestamp"])
 
                         if start_time and entry_time < start_time:
                             continue
