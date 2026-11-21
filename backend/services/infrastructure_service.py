@@ -4,7 +4,7 @@ Business logic for Infrastructure CRUD operations with filtering and pagination
 """
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, or_, and_
+from sqlalchemy import String, and_, cast, func, or_, select
 from typing import Optional, List
 from uuid import UUID
 
@@ -62,7 +62,12 @@ class InfrastructureService:
                 )
             if filters.search:
                 search_term = f"%{filters.search}%"
-                conditions.append(Infrastructure.name.ilike(search_term))
+                conditions.append(
+                    or_(
+                        Infrastructure.name.ilike(search_term),
+                        cast(Infrastructure.configuration, String).ilike(search_term),
+                    )
+                )
             if conditions:
                 query = query.where(and_(*conditions))
 

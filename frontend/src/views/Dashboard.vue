@@ -61,10 +61,10 @@ const fetchDashboardData = async () => {
   try {
     // Fetch stats from various endpoints
     const [tasksRes, assetsRes, projectsRes, infraRes] = await Promise.allSettled([
-      apiClient.get('/tasks').catch(() => ({ data: [] })),
-      apiClient.get('/assets').catch(() => ({ data: [] })),
-      apiClient.get('/projects').catch(() => ({ data: [] })),
-      apiClient.get('/infrastructure').catch(() => ({ data: [] }))
+      apiClient.get('/tasks/').catch(() => ({ data: [] })),
+      apiClient.get('/assets/').catch(() => ({ data: [] })),
+      apiClient.get('/projects/').catch(() => ({ data: [] })),
+      apiClient.get('/infrastructure/').catch(() => ({ data: [] }))
     ])
 
     stats.value = {

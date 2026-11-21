@@ -1,9 +1,9 @@
 # ACGS Enterprise Manager - Backend Dependencies
 
 # FastAPI and web framework
-fastapi==0.109.0
+fastapi==0.109.1
 uvicorn[standard]==0.27.0
-python-multipart==0.0.6
+python-multipart==0.0.31
 
 # Database
 sqlalchemy[asyncio]==2.0.25
@@ -15,8 +15,8 @@ redis==5.0.1
 hiredis==2.3.2
 
 # Authentication
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
+# JWT verification only (tokens come from an external IdP)
+PyJWT[crypto]==2.15.1
 
 # Validation
 pydantic==2.5.3
@@ -27,12 +27,12 @@ email-validator==2.1.0
 acgs-lite==2.9.0
 
 # Utilities
-python-dotenv==1.0.0
+python-dotenv==1.2.2
 pyyaml==6.0.1
 
 # Development
-pytest==7.4.4
-pytest-asyncio==0.23.3
+pytest==9.1.1
+pytest-asyncio==1.4.1
 httpx==0.26.0
-black==24.1.1
+black==24.10.0
 flake8==7.0.0

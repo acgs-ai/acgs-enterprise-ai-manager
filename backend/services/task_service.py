@@ -176,9 +176,12 @@ class TaskService:
         for field, value in update_data.items():
             setattr(task, field, value)
 
-        # Auto-set completed_at when status changes to 'done'
+        # Keep completed_at in step with an explicit status change:
+        # set it on 'done', clear it when a done task is reopened.
         if task_data.status == "done" and task.completed_at is None:
             task.completed_at = datetime.utcnow()
+        elif task_data.status is not None and task_data.status != "done":
+            task.completed_at = None
 
         task.updated_at = datetime.utcnow()
 

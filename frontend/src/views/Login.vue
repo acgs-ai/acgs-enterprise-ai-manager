@@ -6,62 +6,42 @@
 
       <div v-if="error" class="error">{{ error }}</div>
 
-      <form @submit.prevent="handleLogin">
-        <div class="form-group">
-          <label for="username">Username</label>
-          <input
-            id="username"
-            v-model="username"
-            type="text"
-            required
-            placeholder="Enter your username"
-          />
-        </div>
-
-        <div class="form-group">
-          <label for="password">Password</label>
-          <input
-            id="password"
-            v-model="password"
-            type="password"
-            required
-            placeholder="Enter your password"
-          />
-        </div>
-
-        <button type="submit" class="btn btn-primary btn-block" :disabled="loading">
-          {{ loading ? 'Signing in...' : 'Sign In' }}
-        </button>
-      </form>
+      <button
+        type="button"
+        class="btn btn-primary btn-block"
+        :disabled="loading || !configured"
+        @click="handleLogin"
+      >
+        {{ loading ? 'Redirecting...' : 'Sign in with SSO' }}
+      </button>
     </div>
   </div>
 </template>
 
 <script setup>
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/store/auth'
+import { isOidcConfigured } from '@/auth/oidc'
+import { sanitizeReturnTo } from '@/auth/returnTo'
 
-const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 
-const username = ref('')
-const password = ref('')
-const error = ref('')
+const configured = isOidcConfigured()
+const error = ref(
+  configured ? '' : 'SSO not configured: set VITE_OIDC_AUTHORITY and VITE_OIDC_CLIENT_ID.'
+)
 const loading = ref(false)
 
 const handleLogin = async () => {
   error.value = ''
   loading.value = true
-
-  const result = await authStore.login(username.value, password.value)
-
-  loading.value = false
-
-  if (result.success) {
-    router.push('/')
-  } else {
-    error.value = result.error
+  try {
+    await authStore.login(sanitizeReturnTo(route.query.returnTo))
+  } catch (e) {
+    loading.value = false
+    error.value = e?.message || 'Could not start sign in'
   }
 }
 </script>

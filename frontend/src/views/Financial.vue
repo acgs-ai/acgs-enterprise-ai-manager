@@ -87,7 +87,7 @@ const fetchItems = async () => {
   loading.value = true
   error.value = ''
   try {
-    const response = await apiClient.get('/financial')
+    const response = await apiClient.get('/financial/')
     items.value = response.data
   } catch (err) {
     error.value = 'Failed to load financial data'
@@ -102,7 +102,7 @@ const saveItem = async () => {
     if (editingItem.value) {
       await apiClient.put(`/financial/${editingItem.value.id}`, form.value)
     } else {
-      await apiClient.post('/financial', form.value)
+      await apiClient.post('/financial/', form.value)
     }
     await fetchItems()
     cancelForm()

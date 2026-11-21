@@ -24,7 +24,7 @@ ACGS Enterprise Manager is a full-stack AI-powered enterprise management platfor
 - **Backend**: FastAPI (Python 3.13)
 - **Database**: PostgreSQL with cross-domain relationships
 - **Governance**: acgs-lite framework (MACI pattern)
-- **Frontend**: Vue.js (to be implemented)
+- **Frontend**: Vue 3 + Vite (scaffold; views: Login, Dashboard, Projects, Tasks, Assets, Documents, Financial, Infrastructure)
 - **Testing**: pytest with async support
 
 ## Documentation Structure
@@ -32,7 +32,6 @@ ACGS Enterprise Manager is a full-stack AI-powered enterprise management platfor
 ### Getting Started
 - [Installation Guide](installation.md) - Setup and installation instructions
 - [Quick Start](quickstart.md) - Get up and running in 5 minutes
-- [Configuration](configuration.md) - Environment and system configuration
 
 ### Architecture
 - [System Architecture](architecture.md) - High-level system design
@@ -41,18 +40,13 @@ ACGS Enterprise Manager is a full-stack AI-powered enterprise management platfor
 
 ### Governance
 - [Governance Framework](governance.md) - ACGS-Lite integration and rules
-- [AI Operations](ai-operations.md) - AI capabilities and governance gates
-- [Audit Trail](audit-trail.md) - Compliance and audit logging
 
 ### Deployment
 - [Deployment Guide](deployment.md) - Production deployment instructions
 - [Docker Setup](docker.md) - Containerized deployment
-- [Monitoring](monitoring.md) - System monitoring and observability
 
 ### Development
-- [Development Guide](development.md) - Developer setup and workflows
-- [Testing Guide](testing.md) - Test suite and quality assurance
-- [Contributing](contributing.md) - Contribution guidelines
+- [Testing Guide](TESTING.md) - Test suite and quality assurance
 
 ## Quick Links
 
@@ -87,9 +81,8 @@ ACGS Enterprise Manager is a full-stack AI-powered enterprise management platfor
 
 For questions or issues:
 1. Check the relevant documentation section
-2. Review the [FAQ](faq.md)
-3. Check audit logs for governance-related issues
-4. Review test suite for usage examples
+2. Check audit logs for governance-related issues
+3. Review test suite for usage examples
 
 ## License
 

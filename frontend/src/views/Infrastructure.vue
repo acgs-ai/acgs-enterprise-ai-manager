@@ -83,7 +83,7 @@ const fetchItems = async () => {
   loading.value = true
   error.value = ''
   try {
-    const response = await apiClient.get('/infrastructure')
+    const response = await apiClient.get('/infrastructure/')
     items.value = response.data
   } catch (err) {
     error.value = 'Failed to load infrastructure'
@@ -98,7 +98,7 @@ const saveItem = async () => {
     if (editingItem.value) {
       await apiClient.put(`/infrastructure/${editingItem.value.id}`, form.value)
     } else {
-      await apiClient.post('/infrastructure', form.value)
+      await apiClient.post('/infrastructure/', form.value)
     }
     await fetchItems()
     cancelForm()

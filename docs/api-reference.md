@@ -6,42 +6,135 @@ The ACGS Enterprise Manager API is a RESTful API built with FastAPI. All endpoin
 
 **Base URL**: `http://localhost:8000` (development)
 
-**API Documentation**: 
+**API Documentation** (only when `API_DOCS_ENABLED=true`, off by default):
 - Swagger UI: http://localhost:8000/docs
 - ReDoc: http://localhost:8000/redoc
+- OpenAPI schema: http://localhost:8000/openapi.json
 
 ## Authentication
 
-Most endpoints require authentication via JWT tokens.
+Every endpoint requires a bearer JWT except `/health` and `/` (exact paths
+only). When `API_DOCS_ENABLED=true`, `/docs`, `/docs/oauth2-redirect`, `/redoc`
+and `/openapi.json` are also served and public. When it is unset or false (the
+default), they are not served: they return 401 without a token and 404 with one.
+CORS preflight `OPTIONS` requests are also let through.
 
-### Login
-
-```http
-POST /api/auth/login
-Content-Type: application/json
-
-{
-  "email": "user@example.com",
-  "password": "password"
-}
-```
-
-**Response**:
-```json
-{
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "token_type": "bearer",
-  "expires_in": 3600
-}
-```
-
-### Using Authentication
-
-Include the token in the Authorization header:
+Tokens are issued by an **external identity provider**. This API only
+verifies them; it has no login endpoint and does not mint tokens. Obtain a
+token from your IdP and send it on every request:
 
 ```http
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+Authorization: Bearer <access token from your IdP>
 ```
+
+### Token requirements
+
+- Signed with an algorithm in `AUTH_JWT_ALGORITHMS` (default `RS256`; `none` is rejected).
+- Claims `exp`, `iat`, `sub`, `iss` and `aud` are required. `iss` must equal
+  `AUTH_JWT_ISSUER` and `aud` must contain `AUTH_JWT_AUDIENCE`. 30 seconds of
+  clock skew is tolerated.
+- The role is read from the `AUTH_ROLE_CLAIM` claim (default `role`) of the
+  **access token**. Roles rank `admin > manager > user > viewer`. A missing or
+  unknown role is treated as `viewer`.
+- The claim must be a single top-level string with an exact lowercase value
+  (`"manager"`). Values are not lowercased, trimmed or searched for: `"Admin"`,
+  `" admin"`, a list such as `["admin"]`, an object, `null`, a number or a
+  nested claim all count as `viewer`. A namespaced name such as
+  `https://example.com/role` works if it is a top-level key: set
+  `AUTH_ROLE_CLAIM` to that exact name. A role placed only in the ID token is
+  never seen by the API, so every user would be read-only.
+- The role must come from an assignment the IdP administrator controls for
+  this application (an app role, group or client role), never from a
+  profile attribute users can edit themselves.
+- ID tokens are rejected by audience, not by `typ`: an ID token's `aud` is the
+  SPA client id (or a list containing it), and the token is accepted if
+  `AUTH_JWT_AUDIENCE` appears anywhere in `aud`. So `AUTH_JWT_AUDIENCE` must
+  never appear in the ID token's `aud`; in particular it must not be the SPA
+  client id, or an ID token would be accepted as an access token.
+
+Two different outcomes, do not confuse them:
+
+| Token | Result |
+|---|---|
+| Invalid (bad signature, wrong `iss`, wrong `aud`, expired, ID token, edited payload) | **401** on every protected route, reads included. Never treated as viewer |
+| Valid, but role missing or not an exact recognized string | Authenticated as **viewer**: `GET` works, writes get 403 |
+
+The `role` the web app's auth store exposes comes from the ID token profile
+and grants nothing. Changing it, or anything in browser storage, does not change what the API
+allows; an edited access token fails the signature check (401).
+
+### Verifying the role setup
+
+After configuring the IdP, check both directions with freshly issued tokens
+(sign out and in again after any mapping change; existing tokens keep their
+old claims until they expire):
+
+1. Admin account, edit a scratch task you created for this check:
+   `PUT /api/v1/tasks/{id}` with `{"title": "role check"}` returns **200**;
+   `GET /api/v1/tasks/{id}` then shows the new title.
+2. Viewer account (or one with no role), same edit: returns **403**
+   `{"detail": "Insufficient permissions"}`; `GET` still returns **200** with
+   the title unchanged.
+3. Read the response body before acting on a failure:
+   - 403 `{"detail": "Insufficient permissions"}` on the admin edit: the admin
+     role is not reaching the access token (see above).
+   - 403 `{"detail": "Operation blocked by governance rules", ...}` or
+     **202** `requires human approval`: the role check passed and governance
+     stopped the edit (a 202 means nothing was saved yet). Check
+     `config/governance_rules.yaml`, not the IdP.
+   - 401: the token itself is rejected. Check `AUTH_JWT_ISSUER`,
+     `AUTH_JWT_AUDIENCE` and the key settings, not the role.
+
+The same checks run locally without an IdP in
+`tests/integration/test_api_role_boundary.py` (fake database, checks what is
+committed) and, against a real PostgreSQL, in
+`tests/integration/test_api_role_persistence_pg.py`. The latter is skipped
+unless `ACGS_TEST_DATABASE_URL` is set (e.g.
+`postgresql://postgres:postgres@localhost:5432/postgres`); it creates and drops
+its own uniquely named database, so the role needs `CREATEDB`; PostgreSQL 13+.
+
+### Configuration
+
+| Variable | Required | Meaning |
+|---|---|---|
+| `AUTH_JWT_ISSUER` | yes | Expected `iss` |
+| `AUTH_JWT_AUDIENCE` | yes | Expected `aud` |
+| `AUTH_JWT_ALGORITHMS` | no | Comma list, default `RS256`. HS* cannot be mixed with asymmetric algorithms |
+| `AUTH_JWKS_URL` | one of | IdP JWKS endpoint (https). Key set cached 5 min, 5 s fetch timeout. A token with an unknown `kid` forces at most one refetch per 60 s process-wide; other unknown kids in that window get 401 without a fetch |
+| `AUTH_JWT_KEY` | one of | PEM public key (RS*/PS*/ES*/EdDSA) or shared secret of 32+ bytes (HS*) |
+| `AUTH_ROLE_CLAIM` | no | Role claim name, default `role` |
+| `API_DOCS_ENABLED` | no | `true`/`1`/`yes`/`on` serves `/docs`, `/redoc` and `/openapi.json` publicly. Default false: not served. Read at app startup |
+
+See `.env.example`.
+
+### Roles
+
+Every `/api/v1` route has an explicit minimum role in `backend/auth/policy.py`
+(`ROUTE_POLICY`). A higher role can do everything a lower one can. A route with
+no entry is refused for everyone, and CI fails if any route lacks an entry.
+The policy is checked before governance, so a refused request never creates a
+governance decision or approval request. Any `/api/v1` request that matches no
+route (unknown path, or a method the path does not support, including `HEAD`)
+is refused with 403 rather than 404/405.
+
+| Minimum role | Routes |
+|---|---|
+| `viewer` | Every `GET`, including financial reads, reports, search, and recommendations `domains`, `health`, `stats`, `top/{domain}` |
+| `user` | `POST`/`PUT` on tasks, projects, assets, infrastructure and documents (`/`, `/{id}`); `POST /tasks/{task_id}/assets`, `POST /tasks/{task_id}/infrastructure`; `POST /recommendations/generate`, `POST /recommendations/batch` |
+| `manager` | Every `DELETE`; `POST /financial/`, `PUT /financial/{record_id}`; `POST /financial/{record_id}/approve`, `POST /financial/{record_id}/reject` |
+| `admin` | `POST /search/reindex` |
+
+Paths are relative to `/api/v1`.
+
+### Error responses
+
+| Status | Body | When |
+|---|---|---|
+| 401 | `{"detail": "Could not validate credentials"}` + `WWW-Authenticate: Bearer` | Missing, malformed, expired or otherwise invalid token |
+| 403 | `{"detail": "Insufficient permissions"}` | Valid token, role below the route's minimum |
+| 403 | `{"detail": "Forbidden"}` | `/api/v1` request matching no route, or a route with no policy entry (fails closed for every role) |
+| 503 | `{"detail": "Authentication not configured"}` | Required `AUTH_*` settings missing or unsafe |
+| 503 | `{"detail": "Authentication service unavailable"}` | JWKS endpoint unreachable or timed out |
 
 ## Core Domain APIs
 

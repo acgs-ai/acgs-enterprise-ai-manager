@@ -323,23 +323,27 @@ class SearchEngine:
         # This requires unnesting JSONB arrays and counting
         # Using raw SQL for efficiency
         if domain:
-            query = text("""
+            query = text(
+                """
                 SELECT tag, COUNT(*) as count
                 FROM search_index, jsonb_array_elements_text(tags) as tag
                 WHERE domain = :domain
                 GROUP BY tag
                 ORDER BY count DESC
                 LIMIT :limit
-            """)
+            """
+            )
             result = await db.execute(query, {"domain": domain, "limit": limit})
         else:
-            query = text("""
+            query = text(
+                """
                 SELECT tag, COUNT(*) as count
                 FROM search_index, jsonb_array_elements_text(tags) as tag
                 GROUP BY tag
                 ORDER BY count DESC
                 LIMIT :limit
-            """)
+            """
+            )
             result = await db.execute(query, {"limit": limit})
 
         return [(row[0], row[1]) for row in result]

@@ -148,11 +148,15 @@ rules:
     validation:
       min_confidence: 0.70
 
-# Fail-closed enforcement configuration
+# Enforcement configuration
+# - Operations that match no rule are ALLOWED (current engine behavior).
+#   Default-deny for unmatched operations is a tracked follow-up, not implemented.
+# - fail_mode CLOSED: errors (e.g. constitution missing/unparseable, governance
+#   engine exceptions) BLOCK the operation.
 enforcement:
-  default_action: BLOCK
+  default_action: ALLOW
   fail_mode: CLOSED
-  require_explicit_allow: true
+  require_explicit_allow: false
 
 # Audit configuration
 audit:
