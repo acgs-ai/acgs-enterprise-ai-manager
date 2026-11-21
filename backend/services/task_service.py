@@ -11,7 +11,7 @@ from uuid import UUID
 from datetime import datetime
 
 from backend.models.task import Task
-from backend.schemas.task import TaskCreate, TaskUpdate, TaskFilter
+from backend.schemas.task import TASK_STATUS_DONE, TaskCreate, TaskUpdate, TaskFilter
 
 
 class TaskService:
@@ -178,9 +178,9 @@ class TaskService:
 
         # Keep completed_at in step with an explicit status change:
         # set it on 'done', clear it when a done task is reopened.
-        if task_data.status == "done" and task.completed_at is None:
+        if task_data.status == TASK_STATUS_DONE and task.completed_at is None:
             task.completed_at = datetime.utcnow()
-        elif task_data.status is not None and task_data.status != "done":
+        elif task_data.status is not None and task_data.status != TASK_STATUS_DONE:
             task.completed_at = None
 
         task.updated_at = datetime.utcnow()

@@ -4,6 +4,7 @@ Tests pattern matching, validation logic, and rule enforcement.
 """
 
 import pytest
+import yaml
 from pathlib import Path
 from backend.governance.rules_engine import RulesEngine
 
@@ -208,11 +209,12 @@ class TestRulesEngine:
     def test_known_actions_load(self, temp_dir, action):
         """Each known action loads without a load error."""
         rules_file = temp_dir / "known_action.yaml"
+        validation = "    validation:\n      max_batch_size: 10\n"
         rules_file.write_text(
             "rules:\n"
             "  - id: known-rule\n"
             '    pattern: "example"\n'
-            f"    action: {action}\n"
+            f"    action: {action}\n" + (validation if action == "VALIDATE" else "")
         )
 
         engine = RulesEngine(str(rules_file))
@@ -239,7 +241,250 @@ class TestRulesEngine:
         engine = RulesEngine(str(config))
 
         assert engine.load_error is None
-        assert len(engine.rules) == 15
+        assert len(engine.rules) == len(yaml.safe_load(config.read_text())["rules"])
+
+    @pytest.mark.parametrize(
+        "rule_yaml",
+        [
+            '    patern: "harm"\n    action: BLOCK\n',
+            '    pattern: "x"\n    action: VALIDATE\n'
+            "    validation:\n      max_amont: 5\n",
+            '    pattern: "x"\n    action: VALIDATE\n    validation: null\n',
+            '    pattern: "x"\n    action: VALIDATE\n    validation: {}\n',
+            '    pattern: "x"\n    action: VALIDATE\n',
+            '    pattern: "x"\n    action: BLOCK\n'
+            "    validation:\n      max_amount: 5\n",
+            "    context_key: user_id\n    action: BLOCK\n",
+            '    context_pattern: "x"\n    action: BLOCK\n',
+            "    action: BLOCK\n    severity: CRITICAL\n",
+            '    pattern: "x"\n    severity: SEVERE\n',
+            '    pattern: "x"\n    maci_phase: OBSERVE\n',
+            '    pattern: "x"\n    action: VALIDATE\n'
+            '    validation:\n      max_amount: "5000"\n',
+            '    pattern: "x"\n    action: VALIDATE\n'
+            "    validation:\n      min_confidence: true\n",
+            '    pattern: "x"\n    action: VALIDATE\n'
+            "    validation:\n      require_explanation: false\n",
+            '    pattern: "x"\n    action: BLOCK\n    approval_required: true\n',
+            '    pattern: "x"\n    action: REQUIRE_APPROVAL\n'
+            "    approval_required: false\n",
+            '    pattern: "x"\n    description: 42\n',
+            '    pattern: "x"\n    applies_to: []\n',
+            '    pattern: "x"\n    applies_to: [response]\n',
+            '    pattern: "x"\n    applies_to: output\n',
+            '    pattern: "x"\n    immutable: true\n',
+        ],
+        ids=[
+            "patern-typo",
+            "unknown-validation-key",
+            "validation-null",
+            "validation-empty",
+            "validate-without-validation",
+            "validation-on-block",
+            "context-key-without-pattern",
+            "context-pattern-without-key",
+            "no-pattern-no-context-key",
+            "bad-severity",
+            "bad-maci-phase",
+            "string-threshold",
+            "bool-threshold",
+            "require-explanation-false",
+            "approval-required-on-block",
+            "approval-required-false",
+            "non-string-description",
+            "applies-to-empty",
+            "applies-to-unknown-stage",
+            "applies-to-not-a-list",
+            "unenforced-key",
+        ],
+    )
+    def test_unusable_rule_keys_fail_closed(self, temp_dir, rule_yaml):
+        """Unknown or unusable rule keys make the whole constitution untrusted."""
+        rules_file = temp_dir / "strict.yaml"
+        rules_file.write_text("rules:\n  - id: strict-rule\n" + rule_yaml)
+
+        engine = RulesEngine(str(rules_file))
+
+        assert engine.load_error is not None
+        assert "strict-rule" in engine.load_error
+        result = engine.validate("hello", {})
+        assert result["valid"] is False
+        assert result["violations"][0]["rule_id"] == "constitution-unavailable"
+
+    def test_metadata_keys_load(self, temp_dir):
+        """Allowlisted metadata with valid values loads cleanly."""
+        rules_file = temp_dir / "meta.yaml"
+        rules_file.write_text(
+            "rules:\n"
+            "  - id: meta-rule\n"
+            '    pattern: "x"\n'
+            "    action: REQUIRE_APPROVAL\n"
+            "    severity: LOW\n"
+            '    description: "d"\n'
+            "    maci_phase: APPROVE\n"
+            "    approval_required: true\n"
+            "    applies_to: [request, output]\n"
+            "  - id: ctx-rule\n"
+            "    context_key: user_id\n"
+            '    context_pattern: "^admin$"\n'
+            "    action: AUDIT\n"
+        )
+
+        engine = RulesEngine(str(rules_file))
+
+        assert engine.load_error is None
+        assert len(engine.rules) == 2
+
+    @staticmethod
+    def _validate_engine(temp_dir, validation_yaml):
+        rules_file = temp_dir / "validate.yaml"
+        rules_file.write_text(
+            "rules:\n"
+            "  - id: check-rule\n"
+            '    pattern: "op"\n'
+            "    action: VALIDATE\n"
+            "    validation:\n" + validation_yaml
+        )
+        engine = RulesEngine(str(rules_file))
+        assert engine.load_error is None
+        return engine
+
+    @pytest.mark.parametrize(
+        "validation_yaml, context_key",
+        [
+            ("      min_confidence: 0.5\n", "confidence"),
+            ("      max_amount: 100\n", "amount"),
+            ("      require_approval_above: 100\n", "amount"),
+            ("      max_batch_size: 10\n", "batch_size"),
+            ("      min_retention_days: 10\n", "retention_days"),
+            ("      max_retention_days: 10\n", "retention_days"),
+            ("      require_explanation: true\n", "rationale"),
+        ],
+    )
+    @pytest.mark.parametrize("bad_value", ["absent", None, "", True, float("nan")])
+    def test_missing_context_blocks(
+        self, temp_dir, validation_yaml, context_key, bad_value
+    ):
+        """A check whose context is missing or unusable blocks, never defaults."""
+        engine = self._validate_engine(temp_dir, validation_yaml)
+        context = {} if bad_value == "absent" else {context_key: bad_value}
+
+        result = engine.validate("op", context)
+
+        assert result["valid"] is False
+        assert result["violations"][0]["rule_id"] == "check-rule"
+        assert f"context '{context_key}'" in result["violations"][0]["description"]
+
+    def test_max_retention_days(self, temp_dir):
+        engine = self._validate_engine(
+            temp_dir, "      min_retention_days: 90\n      max_retention_days: 2555\n"
+        )
+
+        assert engine.validate("op", {"retention_days": 2555})["valid"] is True
+        result = engine.validate("op", {"retention_days": 2556})
+        assert result["valid"] is False
+        assert "above maximum 2555" in result["violations"][0]["description"]
+        assert engine.validate("op", {"retention_days": 89})["valid"] is False
+
+    def test_require_approval_above(self, temp_dir):
+        engine = self._validate_engine(
+            temp_dir, "      max_amount: 10000\n      require_approval_above: 5000\n"
+        )
+
+        at_threshold = engine.validate("op", {"amount": 5000})
+        assert at_threshold["valid"] is True
+        assert at_threshold["requires_approval"] is False
+        assert at_threshold["violations"] == []
+
+        above = engine.validate("op", {"amount": 5000.01})
+        assert above["valid"] is True
+        assert above["requires_approval"] is True
+        assert above["violations"][0]["action"] == "REQUIRE_APPROVAL"
+        assert above["violations"][0]["rule_id"] == "check-rule"
+
+        # Over the hard limit: blocked, not merely sent for approval.
+        over = engine.validate("op", {"amount": 10001})
+        assert over["valid"] is False
+        assert over["requires_approval"] is False
+        assert over["violations"][0]["action"] == "BLOCK"
+
+    def test_require_explanation(self, temp_dir):
+        engine = self._validate_engine(temp_dir, "      require_explanation: true\n")
+
+        assert engine.validate("op", {"rationale": "because"})["valid"] is True
+        assert engine.validate("op", {"rationale": "   "})["valid"] is False
+        assert engine.validate("op", {"rationale": 42})["valid"] is False
+
+    @staticmethod
+    def _staged_engine(temp_dir):
+        rules_file = temp_dir / "staged.yaml"
+        rules_file.write_text(
+            "rules:\n"
+            "  - id: output-only\n"
+            '    pattern: "recommend"\n'
+            "    action: VALIDATE\n"
+            "    applies_to: [output]\n"
+            "    validation:\n      min_confidence: 0.75\n"
+            "  - id: any-stage\n"
+            '    pattern: "harm"\n'
+            "    action: BLOCK\n"
+            "  - id: request-only\n"
+            '    pattern: "audit"\n'
+            "    action: AUDIT\n"
+            "    applies_to: [request]\n"
+        )
+        engine = RulesEngine(str(rules_file))
+        assert engine.load_error is None
+        return engine
+
+    def test_no_stage_applies_output_only_rules(self, temp_dir):
+        engine = self._staged_engine(temp_dir)
+
+        result = engine.validate("recommend audit", {})
+
+        assert result["valid"] is False
+        assert result["matched_rules"] == ["output-only", "request-only"]
+
+    def test_request_stage_skips_only_output_rules(self, temp_dir):
+        engine = self._staged_engine(temp_dir)
+
+        result = engine.validate("recommend audit", {}, stage="request")
+        assert result["valid"] is True
+        assert result["matched_rules"] == ["request-only"]
+
+        # Rules without applies_to still apply at every stage.
+        assert engine.validate("harm", {}, stage="request")["valid"] is False
+        assert engine.validate("harm", {}, stage="output")["valid"] is False
+
+    def test_output_stage_applies_output_rules(self, temp_dir):
+        engine = self._staged_engine(temp_dir)
+
+        low = engine.validate("recommend audit", {"confidence": 0.5}, stage="output")
+        assert low["valid"] is False
+        assert low["matched_rules"] == ["output-only"]
+        high = engine.validate("recommend", {"confidence": 0.9}, stage="output")
+        assert high["valid"] is True
+
+    def test_unknown_stage_blocks(self, temp_dir):
+        """A stage typo must not silently skip stage-scoped rules."""
+        engine = self._staged_engine(temp_dir)
+
+        result = engine.validate("recommend", {"confidence": 0.1}, stage="reqest")
+
+        assert result["valid"] is False
+        assert result["violations"][0]["rule_id"] == "invalid-governance-stage"
+
+    def test_shipped_financial_limits(self):
+        """The shipped constitution approves above 5000 and blocks above 10000."""
+        config = (
+            Path(__file__).resolve().parents[2] / "config" / "governance_rules.yaml"
+        )
+        engine = RulesEngine(str(config))
+
+        assert engine.validate("payment", {"amount": 4000})["valid"] is True
+        assert engine.validate("payment", {"amount": 6000})["requires_approval"]
+        assert engine.validate("payment", {"amount": 20000})["valid"] is False
+        assert engine.validate("payment", {})["valid"] is False
 
     def test_unmatched_operation_allowed_by_default(
         self, sample_governance_rules, sample_context

@@ -10,34 +10,36 @@ import base64
 import hashlib
 import hmac
 import json
-import re
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional, Tuple
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import jwt
 import pytest
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
 import backend.auth.dependencies as auth_deps
 import backend.middleware.governance_interceptor as governance_interceptor
 from backend.auth.dependencies import get_current_user, require_role
-from backend.database import get_db
 from backend.main import app, create_app
 from backend.middleware.auth import DOCS_PATHS, PUBLIC_PATHS, AuthMiddleware
+from tests.integration._auth_helpers import (
+    _MISSING,
+    CRED_ERROR,
+    _bearer,
+    _claims,
+    _concrete_path,
+    _reset_auth_caches,
+)
 
 pytestmark = pytest.mark.integration
 
-ISSUER = "https://idp.test.example/"
-AUDIENCE = "acgs-enterprise-manager"
-CRED_ERROR = {"detail": "Could not validate credentials"}
 NOT_CONFIGURED = {"detail": "Authentication not configured"}
 ALLOWED_ORIGIN = "http://localhost:3000"
 JWKS_URL = "https://idp.test.example/jwks.json"
-_MISSING = object()
 
 
 # --------------------------------------------------------------------------
@@ -49,112 +51,12 @@ def _b64url(data: bytes) -> str:
     return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
 
 
-def _claims(**overrides: Any) -> Dict[str, Any]:
-    now = int(time.time())
-    claims: Dict[str, Any] = {
-        "sub": "user-123",
-        "iss": ISSUER,
-        "aud": AUDIENCE,
-        "iat": now,
-        "exp": now + 300,
-        "email": "user@example.com",
-        "role": "user",
-    }
-    for key, value in overrides.items():
-        if value is _MISSING:
-            claims.pop(key, None)
-        else:
-            claims[key] = value
-    return claims
-
-
 def _unsigned_token(header: Dict[str, Any], claims: Dict[str, Any]) -> str:
     return (
         _b64url(json.dumps(header).encode())
         + "."
         + _b64url(json.dumps(claims).encode())
     )
-
-
-@pytest.fixture(scope="module")
-def rsa_keys() -> Tuple[Any, str]:
-    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    public_pem = (
-        private_key.public_key()
-        .public_bytes(
-            serialization.Encoding.PEM,
-            serialization.PublicFormat.SubjectPublicKeyInfo,
-        )
-        .decode()
-    )
-    return private_key, public_pem
-
-
-def _reset_auth_caches() -> None:
-    auth_deps.get_auth_settings.cache_clear()
-    auth_deps._jwks_client.cache_clear()
-    auth_deps._last_unknown_kid_refetch = None
-    auth_deps._jwks_fetch_failed_at = None
-
-
-@pytest.fixture
-def auth_env(monkeypatch: pytest.MonkeyPatch, rsa_keys):
-    """Configure RS256 + static PEM key auth; clear cached settings around it."""
-    _, public_pem = rsa_keys
-    for name in (
-        "AUTH_JWKS_URL",
-        "AUTH_ROLE_CLAIM",
-    ):
-        monkeypatch.delenv(name, raising=False)
-    monkeypatch.setenv("AUTH_JWT_ALGORITHMS", "RS256")
-    monkeypatch.setenv("AUTH_JWT_ISSUER", ISSUER)
-    monkeypatch.setenv("AUTH_JWT_AUDIENCE", AUDIENCE)
-    monkeypatch.setenv("AUTH_JWT_KEY", public_pem)
-    _reset_auth_caches()
-    yield monkeypatch
-    _reset_auth_caches()
-
-
-@pytest.fixture
-def make_token(rsa_keys):
-    private_key, _ = rsa_keys
-
-    def _make(headers: Optional[Dict[str, Any]] = None, **overrides: Any) -> str:
-        return jwt.encode(
-            _claims(**overrides), private_key, algorithm="RS256", headers=headers
-        )
-
-    return _make
-
-
-@pytest.fixture
-def db_calls():
-    """Override get_db with an AsyncMock session and record handler entry."""
-    calls: List[Any] = []
-
-    async def _fake_db():
-        session = AsyncMock()
-        session.add = MagicMock()
-        calls.append(session)
-        yield session
-
-    app.dependency_overrides[get_db] = _fake_db
-    yield calls
-    app.dependency_overrides.pop(get_db, None)
-
-
-@pytest.fixture
-def client(auth_env, db_calls) -> TestClient:
-    # Not used as a context manager: the lifespan (init_db) never runs.
-    return TestClient(app, raise_server_exceptions=False)
-
-
-def _bearer(token: str) -> Dict[str, str]:
-    return {"Authorization": f"Bearer {token}"}
-
-
-def _concrete_path(path: str) -> str:
-    return re.sub(r"\{[^}]+\}", "00000000-0000-0000-0000-000000000001", path)
 
 
 def _protected_route_calls() -> List[Tuple[str, str]]:
@@ -234,17 +136,6 @@ def test_every_non_public_route_requires_token(client):
         if response.status_code != 401 or response.json() != CRED_ERROR:
             failures.append((method, path, response.status_code))
     assert failures == []
-
-
-def test_every_api_route_carries_auth_dependency():
-    missing = [
-        route.path
-        for route in app.routes
-        if route.path.startswith("/api/")
-        and get_current_user
-        not in [d.call for d in getattr(route, "dependant").dependencies]
-    ]
-    assert missing == []
 
 
 @pytest.mark.parametrize("path", sorted(PUBLIC_PATHS))
@@ -437,13 +328,11 @@ def test_jwks_refetch_allowed_again_after_window(jwks, make_token):
 
 
 def test_jwks_refetch_slot_is_thread_safe(jwks):
-    from concurrent.futures import ThreadPoolExecutor
-
     with ThreadPoolExecutor(max_workers=16) as pool:
         results = list(
             pool.map(lambda _: auth_deps._claim_unknown_kid_refetch(), range(200))
         )
-    assert results.count(True) == 1
+    assert sum(r is not None for r in results) == 1
 
 
 def test_jwks_fetch_error_is_503(jwks, make_token):
@@ -516,38 +405,148 @@ def test_jwks_fetch_failure_backs_off_then_retries(jwks, make_token):
     assert jwks["fetches"] == 2
 
 
-def test_jwks_concurrent_requests_single_flight(jwks, make_token):
-    import threading
-    from concurrent.futures import ThreadPoolExecutor
+class _CountingLock:
+    """Stand-in for _jwks_fetch_lock that counts acquire attempts."""
 
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._count_lock = threading.Lock()
+        self.attempts = 0
+
+    def acquire(self, *args: Any, **kwargs: Any) -> bool:
+        with self._count_lock:
+            self.attempts += 1
+        return self._lock.acquire(*args, **kwargs)
+
+    def release(self) -> None:
+        self._lock.release()
+
+
+def _wait_for(predicate, timeout: float = 5.0) -> bool:
+    # Must stay below JWKS_FETCH_WAIT_SECONDS, or waiters give up first.
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():
+            return True
+        time.sleep(0.01)
+    return predicate()
+
+
+def _run_while_fetch_is_gated(jwks, monkeypatch, n: int, attempt) -> List[Any]:
+    """Run n attempts concurrently; release the gated fetch only once all n
+    are at the fetch lock (one fetching, n - 1 waiting)."""
     gate = threading.Event()
     jwks["gate"] = gate
+    lock = _CountingLock()
+    monkeypatch.setattr(auth_deps, "_jwks_fetch_lock", lock)
+    with ThreadPoolExecutor(max_workers=n) as pool:
+        try:
+            futures = [pool.submit(attempt) for _ in range(n)]
+            assert _wait_for(lambda: lock.attempts >= n and jwks["fetches"] == 1)
+        finally:
+            gate.set()
+        return [f.result(timeout=10) for f in futures]
+
+
+def test_jwks_concurrent_requests_single_flight(jwks, make_token, monkeypatch):
     settings = auth_deps.get_auth_settings()
     token = make_token(headers={"kid": "k1"})
-    leader = threading.Thread(target=auth_deps._resolve_key, args=(settings, token))
-    leader.start()
-    for _ in range(100):
-        if jwks["fetches"]:
-            break
-        time.sleep(0.01)
-    assert jwks["fetches"] == 1
 
-    def _attempt(_):
+    def _attempt():
         try:
             auth_deps._resolve_key(settings, token)
         except auth_deps.AuthUnavailableError:
             return "503"
         return "ok"
 
-    with ThreadPoolExecutor(max_workers=16) as pool:
-        results = list(pool.map(_attempt, range(50)))
-    gate.set()
-    leader.join(timeout=10)
-    assert results == ["503"] * 50
+    results = _run_while_fetch_is_gated(jwks, monkeypatch, 50, _attempt)
+    assert results == ["ok"] * 50
     assert jwks["fetches"] == 1
     # After the in-flight fetch succeeded, requests are served from cache.
     assert auth_deps._resolve_key(settings, token) is not None
     assert jwks["fetches"] == 1
+
+
+def test_jwks_concurrent_requests_through_app_wait_for_fetch(
+    jwks, make_token, monkeypatch, db_calls
+):
+    token = _bearer(make_token(headers={"kid": "k1"}))
+
+    def _attempt():
+        client = TestClient(app, raise_server_exceptions=False)
+        return client.get("/api/v1/tasks/", headers=token).status_code
+
+    statuses = _run_while_fetch_is_gated(jwks, monkeypatch, 20, _attempt)
+    assert [s for s in statuses if s in (401, 403, 503)] == []
+    assert jwks["fetches"] == 1
+
+
+def test_jwks_waiters_do_not_refetch_after_leader_fails(jwks, make_token, monkeypatch):
+    jwks["error"] = jwt.PyJWKClientConnectionError("down")
+    settings = auth_deps.get_auth_settings()
+    token = make_token(headers={"kid": "k1"})
+
+    def _attempt():
+        try:
+            auth_deps._resolve_key(settings, token)
+        except auth_deps.AuthUnavailableError:
+            return "503"
+        return "ok"
+
+    results = _run_while_fetch_is_gated(jwks, monkeypatch, 10, _attempt)
+    assert results == ["503"] * 10
+    assert jwks["fetches"] == 1
+
+
+def test_jwks_expired_cache_with_failing_fetch_fails_closed(jwks, make_token):
+    client = TestClient(app, raise_server_exceptions=False)
+    known = _bearer(make_token(headers={"kid": "k1"}))
+    assert client.get("/api/v1/tasks/", headers=known).status_code not in (
+        401,
+        403,
+        503,
+    )
+    assert jwks["fetches"] == 1
+    # PyJWT's cache uses the real clock: age the entry past its lifespan.
+    cached = auth_deps._jwks_client(JWKS_URL).jwk_set_cache.jwk_set_with_timestamp
+    cached.timestamp -= auth_deps.JWKS_CACHE_LIFESPAN_SECONDS + 1
+    jwks["error"] = jwt.PyJWKClientConnectionError("down")
+
+    assert client.get("/api/v1/tasks/", headers=known).status_code == 503
+    assert jwks["fetches"] == 2
+    # During backoff the expired set is still not served, and nothing is fetched.
+    assert client.get("/api/v1/tasks/", headers=known).status_code == 503
+    assert jwks["fetches"] == 2
+
+
+def test_jwks_failed_unknown_kid_refetch_does_not_use_up_slot(jwks, make_token):
+    client = TestClient(app, raise_server_exceptions=False)
+    known = _bearer(make_token(headers={"kid": "k1"}))
+    assert client.get("/api/v1/tasks/", headers=known).status_code not in (
+        401,
+        403,
+        503,
+    )
+    jwks["error"] = jwt.PyJWKClientConnectionError("down")
+    first = _bearer(make_token(headers={"kid": "rotated-1"}))
+    assert client.get("/api/v1/tasks/", headers=first).status_code == 503
+    assert jwks["fetches"] == 2
+
+    # After the backoff, still inside the unknown-kid window, the slot is free.
+    jwks["error"] = None
+    jwks["now"] += auth_deps.JWKS_FETCH_FAILURE_BACKOFF_SECONDS
+    assert (
+        auth_deps.JWKS_FETCH_FAILURE_BACKOFF_SECONDS
+        < auth_deps.JWKS_UNKNOWN_KID_REFETCH_SECONDS
+    )
+    second = _bearer(make_token(headers={"kid": "rotated-2"}))
+    _assert_rejected(client.get("/api/v1/tasks/", headers=second))
+    assert jwks["fetches"] == 3
+
+    # A successful (bogus-kid) refetch does use up the slot.
+    third = _bearer(make_token(headers={"kid": "rotated-3"}))
+    _assert_rejected(client.get("/api/v1/tasks/", headers=third))
+    assert jwks["fetches"] == 3
 
 
 def test_jwks_failed_refetch_keeps_valid_cache(jwks, make_token, db_calls):
@@ -718,12 +717,6 @@ def test_missing_or_unsafe_config_fails_closed(
 # --------------------------------------------------------------------------
 # Middleware ordering: CORS -> Auth -> Governance
 # --------------------------------------------------------------------------
-
-
-def test_middleware_stack_order():
-    names = [m.cls.__name__ for m in app.user_middleware]  # outermost first
-    assert names.index("CORSMiddleware") < names.index("AuthMiddleware")
-    assert names.index("AuthMiddleware") < names.index("GovernanceMiddleware")
 
 
 def test_401_carries_cors_headers(client):

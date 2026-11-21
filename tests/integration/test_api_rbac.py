@@ -2,38 +2,37 @@
 Integration tests for route authorization (backend.auth.policy).
 
 Drives the real ``backend.main.app`` with tokens minted by the fixtures in
-test_api_auth.py. Governance is stubbed to ALLOW so the only 403 source on
+tests/integration/conftest.py. Governance is stubbed to ALLOW so the only 403 source on
 these routes is the role policy.
 """
 
+from types import SimpleNamespace
 from typing import List, Tuple
-from unittest.mock import MagicMock
+from unittest.mock import DEFAULT, AsyncMock, MagicMock
+from uuid import uuid4
 
 import pytest
 from fastapi import APIRouter, FastAPI
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
+from sqlalchemy.sql.elements import BinaryExpression
 
-import backend.middleware.governance_interceptor as governance_interceptor
-from backend.auth.dependencies import ROLE_HIERARCHY, get_current_user
 from backend.api import tasks
+from backend.auth.dependencies import ROLE_HIERARCHY, get_current_user
 from backend.auth.policy import ROUTE_POLICY, enforce_route_policy
 from backend.database import get_db
 from backend.main import API_AUTH_DEPENDENCIES, app, create_app
 from backend.middleware.auth import AuthMiddleware
-from tests.integration.test_api_auth import (  # noqa: F401  (fixtures)
-    _MISSING,
-    _bearer,
-    _concrete_path,
-    auth_env,
-    db_calls,
-    make_token,
-    rsa_keys,
-)
+from backend.models.user import User
+from tests.integration._auth_helpers import _MISSING, _bearer, _concrete_path
 
-pytestmark = pytest.mark.integration
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.usefixtures("allow_governance"),
+]
 
 INSUFFICIENT = {"detail": "Insufficient permissions"}
+APPROVER_SUB = "idp|rbac-approver"
 ROLES_BY_RANK = sorted(ROLE_HIERARCHY, key=ROLE_HIERARCHY.get)
 
 
@@ -50,27 +49,41 @@ def _role_below(role: str) -> str:
     return ROLES_BY_RANK[ROLES_BY_RANK.index(role) - 1]
 
 
-@pytest.fixture(autouse=True)
-def allow_governance(monkeypatch):
-    governance = MagicMock()
-    governance.validate_operation.return_value = {
-        "action": "ALLOW",
-        "violations": [],
-        "decision_id": "d-test",
-    }
-    monkeypatch.setattr(governance_interceptor, "get_governance", lambda: governance)
-    return governance
-
-
 @pytest.fixture
-def client(auth_env, db_calls) -> TestClient:  # noqa: F811
-    return TestClient(app, raise_server_exceptions=False)
+def call(client, make_token, db_calls):
+    # approve/reject resolve the approver as the active user whose
+    # external_subject is the token sub; answer that one query with such a
+    # user so they get past it. Every other query keeps the AsyncMock default.
+    approver = SimpleNamespace(
+        id=uuid4(), external_subject=APPROVER_SUB, is_active=True
+    )
 
+    async def _execute(statement, *args, **kwargs):
+        descriptions = getattr(statement, "column_descriptions", None)
+        clause = getattr(statement, "whereclause", None)
+        if (
+            descriptions
+            and descriptions[0]["entity"] is User
+            and isinstance(clause, BinaryExpression)
+            and clause.left.compare(User.__table__.c.external_subject)
+            and getattr(clause.right, "value", None) == APPROVER_SUB
+        ):
+            result = MagicMock()
+            result.scalars.return_value.all.return_value = [approver]
+            return result
+        return DEFAULT
 
-@pytest.fixture
-def call(client, make_token):  # noqa: F811
+    async def _fake_db():
+        session = AsyncMock()
+        session.add = MagicMock()
+        session.execute = AsyncMock(side_effect=_execute)
+        db_calls.append(session)
+        yield session
+
+    app.dependency_overrides[get_db] = _fake_db
+
     def _do(method: str, path: str, role):
-        token = make_token(role=role)
+        token = make_token(role=role, sub=APPROVER_SUB)
         return client.request(method, _concrete_path(path), headers=_bearer(token))
 
     return _do
@@ -190,7 +203,7 @@ def test_spot_checks(call, method, path, role, allowed):
         assert response.json() == INSUFFICIENT
 
 
-def test_missing_role_claim_is_viewer(call, db_calls):  # noqa: F811
+def test_missing_role_claim_is_viewer(call, db_calls):
     response = call("POST", "/api/v1/tasks/", _MISSING)
     assert response.status_code == 403
     assert response.json() == INSUFFICIENT
@@ -208,7 +221,7 @@ def test_403_does_not_reveal_required_role(call, minimum):
 
 
 def test_route_without_policy_entry_is_forbidden_even_for_admin(
-    auth_env, make_token, caplog  # noqa: F811
+    auth_env, make_token, caplog
 ):
     router = APIRouter()
 
@@ -293,7 +306,7 @@ def test_unmatched_api_request_is_forbidden_for_admin(
     allow_governance.request_approval.assert_not_called()
 
 
-def test_denial_is_logged_without_token(client, make_token, caplog):  # noqa: F811
+def test_denial_is_logged_without_token(client, make_token, caplog):
     token = make_token(role="viewer", sub="viewer-42")
     response = client.post(GENERATE, headers=_bearer(token))
     assert response.status_code == 403
@@ -308,7 +321,7 @@ def test_denial_is_logged_without_token(client, make_token, caplog):  # noqa: F8
     assert token not in caplog.text
 
 
-def test_dependency_alone_enforces_policy(auth_env, make_token):  # noqa: F811
+def test_dependency_alone_enforces_policy(auth_env, make_token):
     """Defence in depth: without RBACMiddleware the route dependency still
     refuses, using the same decision function."""
 

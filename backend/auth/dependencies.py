@@ -63,10 +63,12 @@ JWKS_UNKNOWN_KID_REFETCH_SECONDS = 60
 _monotonic = time.monotonic  # injectable clock for tests
 _unknown_kid_refetch_lock = threading.Lock()
 _last_unknown_kid_refetch: Optional[float] = None
-# After a failed JWKS fetch, no fetch is attempted for this long (503 instead),
-# and only one fetch may be in flight at a time (others get 503, not a fetch).
+# After a failed JWKS fetch, no fetch is attempted for this long (503 instead).
+# Only one fetch may be in flight at a time; concurrent requests wait for it
+# (up to JWKS_FETCH_WAIT_SECONDS, then 503) and reuse its outcome.
 JWKS_FETCH_FAILURE_BACKOFF_SECONDS = 30
-_jwks_fetch_lock = threading.Lock()  # single-flight; never waited on
+JWKS_FETCH_WAIT_SECONDS = JWKS_FETCH_TIMEOUT_SECONDS + 1
+_jwks_fetch_lock = threading.Lock()  # single-flight
 _jwks_state_lock = threading.Lock()
 _jwks_fetch_failed_at: Optional[float] = None
 
@@ -185,21 +187,60 @@ class _GuardedJWKClient(jwt.PyJWKClient):
     """PyJWKClient whose every network fetch is single-flight with backoff.
 
     A failed fetch never clears a still-valid cached key set, so known kids
-    keep validating during an IdP outage until the cache expires.
+    keep validating during an IdP outage until the cache expires. An expired
+    key set is never served: once it expires, a failed fetch means 503.
+
+    Requests that need a fetch while another is in flight wait for it (at
+    most JWKS_FETCH_WAIT_SECONDS) and reuse its outcome: its key set if it
+    succeeded, AuthUnavailableError if it failed. They never fetch again.
     """
 
-    def fetch_data(self) -> Any:
-        if _jwks_in_backoff():
-            raise AuthUnavailableError("JWKS fetch in failure backoff")
-        if not _jwks_fetch_lock.acquire(blocking=False):
-            raise AuthUnavailableError("JWKS fetch already in progress")
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        # Bumped (under _jwks_fetch_lock) when a fetch attempt finishes.
+        self._fetch_generation = 0
+        self._last_fetch_ok = False
+        self._last_fetch_data: Any = None
+
+    def get_jwk_set(self, refresh: bool = False) -> jwt.PyJWKSet:
+        # Read before the cache check: a fetch finishing after this point
+        # changes the generation, so this call reuses it instead of fetching.
+        generation = self._fetch_generation
+        cache = self.jwk_set_cache
+        data = cache.get() if cache is not None and not refresh else None
+        if data is None:
+            if _jwks_in_backoff():
+                raise AuthUnavailableError("JWKS fetch in failure backoff")
+            if not _jwks_fetch_lock.acquire(timeout=JWKS_FETCH_WAIT_SECONDS):
+                raise AuthUnavailableError("JWKS fetch did not finish in time")
+            try:
+                if self._fetch_generation != generation:
+                    # Another request fetched while this one waited.
+                    if not self._last_fetch_ok:
+                        raise AuthUnavailableError("JWKS fetch failed")
+                    data = self._last_fetch_data
+                else:
+                    data = self._fetch_locked()
+            finally:
+                _jwks_fetch_lock.release()
+        if isinstance(data, jwt.PyJWKSet):
+            # Newer PyJWT caches the parsed set, so a cache hit is served as-is.
+            return data
+        if not isinstance(data, dict):
+            raise jwt.PyJWKClientError("The JWKS endpoint did not return a JSON object")
+        return jwt.PyJWKSet.from_dict(data)
+
+    def _fetch_locked(self) -> Any:
+        """One network fetch. Caller holds _jwks_fetch_lock."""
         cache = self.jwk_set_cache
         cached = cache.jwk_set_with_timestamp if cache is not None else None
+        self._last_fetch_ok = False
+        self._last_fetch_data = None
         try:
             if _jwks_in_backoff():
                 raise AuthUnavailableError("JWKS fetch in failure backoff")
             try:
-                data = super().fetch_data()
+                data = self.fetch_data()
             except Exception:
                 _set_jwks_fetch_failed_at(_monotonic())
                 if cache is not None:
@@ -207,9 +248,15 @@ class _GuardedJWKClient(jwt.PyJWKClient):
                     cache.jwk_set_with_timestamp = cached
                 raise
             _set_jwks_fetch_failed_at(None)
+            if cache is not None:
+                # Some PyJWT versions fill the cache in get_jwk_set, not
+                # fetch_data; this override replaces get_jwk_set.
+                cache.put(data)
+            self._last_fetch_ok = True
+            self._last_fetch_data = data
             return data
         finally:
-            _jwks_fetch_lock.release()
+            self._fetch_generation += 1
 
 
 @lru_cache(maxsize=4)
@@ -222,16 +269,29 @@ def _jwks_client(url: str) -> jwt.PyJWKClient:
     )
 
 
-def _claim_unknown_kid_refetch() -> bool:
-    """Atomically take the process-wide unknown-kid refetch slot, if free."""
+def _claim_unknown_kid_refetch() -> Optional[Tuple[Optional[float], float]]:
+    """Atomically take the process-wide unknown-kid refetch slot, if free.
+
+    Returns ``(previous, stamp)`` for _rollback_unknown_kid_refetch, or None
+    if the slot is taken.
+    """
     global _last_unknown_kid_refetch
     now = _monotonic()
     with _unknown_kid_refetch_lock:
         last = _last_unknown_kid_refetch
         if last is not None and now - last < JWKS_UNKNOWN_KID_REFETCH_SECONDS:
-            return False
+            return None
         _last_unknown_kid_refetch = now
-        return True
+        return last, now
+
+
+def _rollback_unknown_kid_refetch(claim: Tuple[Optional[float], float]) -> None:
+    """Give back a slot whose refetch raised, unless it was retaken since."""
+    global _last_unknown_kid_refetch
+    previous, stamp = claim
+    with _unknown_kid_refetch_lock:
+        if _last_unknown_kid_refetch == stamp:
+            _last_unknown_kid_refetch = previous
 
 
 def _resolve_key(settings: AuthSettings, token: str) -> Any:
@@ -244,9 +304,17 @@ def _resolve_key(settings: AuthSettings, token: str) -> Any:
         # Served from the cached JWK set; fetches only when empty or expired.
         signing_key = client.match_kid(client.get_signing_keys(), kid)
         if signing_key is None:
-            if not _claim_unknown_kid_refetch():
+            claim = _claim_unknown_kid_refetch()
+            if claim is None:
                 raise InvalidCredentialsError()
-            refreshed = client.get_signing_keys(refresh=True)
+            try:
+                refreshed = client.get_signing_keys(refresh=True)
+            except Exception:
+                # A failed refetch must not use up the slot. Failed fetches are
+                # rate-limited by the failure backoff instead, and an unusable
+                # response is cached, so it fails before reaching the claim.
+                _rollback_unknown_kid_refetch(claim)
+                raise
             signing_key = client.match_kid(refreshed, kid)
         if signing_key is None:
             raise InvalidCredentialsError()
@@ -280,7 +348,11 @@ async def verify_token(token: str, settings: AuthSettings) -> Dict[str, Any]:
     Raises InvalidCredentialsError for any token problem and
     AuthUnavailableError if key material cannot be fetched.
     """
-    key = await run_in_threadpool(_resolve_key, settings, token)
+    # A static key needs no I/O; only the JWKS path may block on a fetch.
+    if settings.jwks_url is None:
+        key = settings.key
+    else:
+        key = await run_in_threadpool(_resolve_key, settings, token)
     try:
         payload = jwt.decode(
             token,

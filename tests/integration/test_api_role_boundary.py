@@ -12,31 +12,29 @@ policy is the only 403 source.
 
 import time
 import uuid
+from datetime import datetime, timezone
 from typing import Any, Dict, List
 from unittest.mock import AsyncMock, MagicMock
 
 import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
-from datetime import datetime, timezone
 from fastapi.testclient import TestClient
 
-import backend.middleware.governance_interceptor as governance_interceptor
 from backend.database import get_db
 from backend.main import app
 from backend.models.task import Task
-from tests.integration.test_api_auth import (  # noqa: F401  (fixtures)
-    AUDIENCE,
-    CRED_ERROR,
-    ISSUER,
+from tests.integration._auth_helpers import (
     _MISSING,
+    CRED_ERROR,
     _bearer,
-    auth_env,
-    make_token,
-    rsa_keys,
+    _claims,
 )
 
-pytestmark = pytest.mark.integration
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.usefixtures("allow_governance"),
+]
 
 TASK_ID = "00000000-0000-0000-0000-0000000000aa"
 TASK_URL = f"/api/v1/tasks/{TASK_ID}"
@@ -100,18 +98,6 @@ class FakeTaskStore:
         yield session
 
 
-@pytest.fixture(autouse=True)
-def allow_governance(monkeypatch):
-    governance = MagicMock()
-    governance.validate_operation.return_value = {
-        "action": "ALLOW",
-        "violations": [],
-        "decision_id": "d-test",
-    }
-    monkeypatch.setattr(governance_interceptor, "get_governance", lambda: governance)
-    return governance
-
-
 @pytest.fixture
 def store():
     store = FakeTaskStore()
@@ -121,7 +107,7 @@ def store():
 
 
 @pytest.fixture
-def client(auth_env, store) -> TestClient:  # noqa: F811
+def client(auth_env, store) -> TestClient:
     return TestClient(app, raise_server_exceptions=False)
 
 
@@ -144,7 +130,7 @@ def _assert_unchanged(store: FakeTaskStore, allow_governance) -> None:
 # --------------------------------------------------------------------------
 
 
-def test_admin_edit_succeeds_and_is_committed(client, make_token, store):  # noqa: F811
+def test_admin_edit_succeeds_and_is_committed(client, make_token, store):
     response = _edit(client, _bearer(make_token(role="admin")))
 
     assert response.status_code == 200, response.text
@@ -152,9 +138,7 @@ def test_admin_edit_succeeds_and_is_committed(client, make_token, store):  # noq
     assert store.commits == [{"title": NEW_TITLE, "status": "todo"}]
 
 
-def test_admin_delete_succeeds_and_is_committed(
-    client, make_token, store
-):  # noqa: F811
+def test_admin_delete_succeeds_and_is_committed(client, make_token, store):
     response = client.delete(TASK_URL, headers=_bearer(make_token(role="admin")))
 
     assert response.status_code == 204, response.text
@@ -163,7 +147,7 @@ def test_admin_delete_succeeds_and_is_committed(
 
 
 def test_viewer_edit_is_denied_and_nothing_changes(
-    client, make_token, store, allow_governance  # noqa: F811
+    client, make_token, store, allow_governance
 ):
     response = _edit(client, _bearer(make_token(role="viewer")))
 
@@ -173,7 +157,7 @@ def test_viewer_edit_is_denied_and_nothing_changes(
 
 
 def test_viewer_delete_is_denied_and_nothing_changes(
-    client, make_token, store, allow_governance  # noqa: F811
+    client, make_token, store, allow_governance
 ):
     response = client.delete(TASK_URL, headers=_bearer(make_token(role="viewer")))
 
@@ -181,9 +165,7 @@ def test_viewer_delete_is_denied_and_nothing_changes(
     _assert_unchanged(store, allow_governance)
 
 
-def test_user_role_may_edit_but_not_delete(
-    client, make_token, store, allow_governance  # noqa: F811
-):
+def test_user_role_may_edit_but_not_delete(client, make_token, store, allow_governance):
     # "user" is a real editing role, not a viewer: edits pass, deletes need manager.
     token = make_token(role="user")
     assert _edit(client, _bearer(token)).status_code == 200
@@ -194,9 +176,7 @@ def test_user_role_may_edit_but_not_delete(
     assert store.deleted == []
 
 
-def test_reindex_needs_admin_not_manager(
-    client, make_token, store, allow_governance  # noqa: F811
-):
+def test_reindex_needs_admin_not_manager(client, make_token, store, allow_governance):
     # The only admin-only route: proves "admin" is distinguished from "manager".
     url = "/api/v1/search/reindex"
     response = client.post(url, headers=_bearer(make_token(role="manager")))
@@ -216,7 +196,7 @@ def test_reindex_needs_admin_not_manager(
 
 @pytest.mark.parametrize("role", [_MISSING, *UNSUPPORTED_ROLE_VALUES], ids=repr)
 def test_missing_or_unsupported_role_falls_back_to_viewer(
-    client, make_token, store, allow_governance, role  # noqa: F811
+    client, make_token, store, allow_governance, role
 ):
     token = make_token(role=role)
 
@@ -236,7 +216,7 @@ def test_missing_or_unsupported_role_falls_back_to_viewer(
 # --------------------------------------------------------------------------
 
 
-def _id_token(make_token, **overrides):  # noqa: F811
+def _id_token(make_token, **overrides):
     # Shape of an OIDC ID token: audience is the SPA client id, carries a nonce.
     claims = {"aud": SPA_CLIENT_ID, "nonce": "n-123", "role": "admin"}
     claims.update(overrides)
@@ -244,7 +224,7 @@ def _id_token(make_token, **overrides):  # noqa: F811
 
 
 def test_access_token_without_role_gets_no_admin_even_if_id_token_has_it(
-    client, make_token, store, allow_governance  # noqa: F811
+    client, make_token, store, allow_governance
 ):
     # The ID token (which may say "admin") is never sent to the API; the API
     # sees only this access token, which carries no role -> viewer.
@@ -255,9 +235,7 @@ def test_access_token_without_role_gets_no_admin_even_if_id_token_has_it(
     _assert_unchanged(store, allow_governance)
 
 
-def test_id_token_as_bearer_is_rejected(
-    client, make_token, store, allow_governance  # noqa: F811
-):
+def test_id_token_as_bearer_is_rejected(client, make_token, store, allow_governance):
     # Rejected by audience (aud = SPA client id, not AUTH_JWT_AUDIENCE). The
     # API does not rely on "typ": many IdPs label both token kinds "JWT".
     for method in ("GET", "PUT"):
@@ -282,17 +260,9 @@ def foreign_key():
     return rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
 
-def _invalid_admin_tokens(make_token, foreign_key) -> Dict[str, str]:  # noqa: F811
+def _invalid_admin_tokens(make_token, foreign_key) -> Dict[str, str]:
     now = int(time.time())
-    admin_claims = {
-        "sub": "user-123",
-        "iss": ISSUER,
-        "aud": AUDIENCE,
-        "iat": now,
-        "exp": now + 300,
-        "role": "admin",
-    }
-    foreign = jwt.encode(admin_claims, foreign_key, algorithm="RS256")
+    foreign = jwt.encode(_claims(role="admin"), foreign_key, algorithm="RS256")
     viewer = make_token(role="viewer").split(".")
     return {
         "invalid_signature": foreign,
@@ -317,7 +287,7 @@ def _invalid_admin_tokens(make_token, foreign_key) -> Dict[str, str]:  # noqa: F
 )
 @pytest.mark.parametrize("method", ["GET", "PUT"])
 def test_invalid_token_is_rejected_not_viewer(
-    client, make_token, foreign_key, store, allow_governance, case, method  # noqa: F811
+    client, make_token, foreign_key, store, allow_governance, case, method
 ):
     token = _invalid_admin_tokens(make_token, foreign_key)[case]
     response = client.request(

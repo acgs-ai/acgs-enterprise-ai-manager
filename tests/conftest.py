@@ -25,7 +25,6 @@ def isolated_audit_dir(
     monkeypatch.setenv("ACGS_AUDIT_DIR", str(audit_dir))
     monkeypatch.setattr(acgs_integration, "_governance_instance", None)
     yield audit_dir
-    acgs_integration._governance_instance = None
 
 
 @pytest.fixture

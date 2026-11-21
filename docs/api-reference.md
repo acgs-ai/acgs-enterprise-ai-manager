@@ -126,6 +126,13 @@ is refused with 403 rather than 404/405.
 
 Paths are relative to `/api/v1`.
 
+The approver recorded by `POST /financial/{record_id}/approve` and
+`POST /financial/{record_id}/reject` is always the authenticated caller: the
+active user whose `users.external_subject` equals the token `sub`. A
+client-supplied approver is ignored. `403 {"detail": "Approver identity not
+provisioned"}` means no active user has that subject; an administrator must set
+`external_subject` (added by `database/migrations/004_user_external_subject.sql`).
+
 ### Error responses
 
 | Status | Body | When |

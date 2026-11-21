@@ -211,7 +211,11 @@ class ACGSIntegration:
             )
 
     def validate_operation(
-        self, operation: str, context: Dict[str, Any], agent_id: str = "default"
+        self,
+        operation: str,
+        context: Dict[str, Any],
+        agent_id: str = "default",
+        stage: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Validate an AI operation against governance rules (MACI: Monitor phase).
@@ -220,6 +224,8 @@ class ACGSIntegration:
             operation: Description of the operation to validate
             context: Additional context for validation
             agent_id: Identifier for the AI agent
+            stage: "request" or "output" (see RulesEngine.validate); None
+                applies every rule. Recorded in the audited context.
 
         Returns:
             Dict containing validation result with keys:
@@ -230,8 +236,11 @@ class ACGSIntegration:
         """
         start_time = datetime.utcnow()
 
+        if stage is not None:
+            context = {**context, "stage": stage}
+
         # Validate using rules engine
-        validation_result = self.rules_engine.validate(operation, context)
+        validation_result = self.rules_engine.validate(operation, context, stage=stage)
 
         # If acgs-lite is available, use it for additional validation
         if self.acgs_engine is not None:

@@ -10,11 +10,7 @@ export const useAuthStore = defineStore('auth', {
   }),
 
   getters: {
-    isAuthenticated: (state) => !!state.user && !state.user.expired,
-    currentUser: (state) => {
-      const p = state.user?.profile
-      return p ? { sub: p.sub, email: p.email, name: p.name, role: p.role } : null
-    }
+    isAuthenticated: (state) => !!state.user && !state.user.expired
   },
 
   actions: {

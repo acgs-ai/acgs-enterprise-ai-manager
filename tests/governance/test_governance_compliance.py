@@ -3,8 +3,17 @@ Governance-specific test suite.
 Tests governance rules enforcement, audit trails, and compliance.
 """
 
+from pathlib import Path
+
 import pytest
+import yaml
+
 from backend.governance.acgs_integration import ACGSIntegration
+from backend.governance.rules_engine import (
+    ALLOWED_RULE_KEYS,
+    ALLOWED_VALIDATION_KEYS,
+    RulesEngine,
+)
 
 
 @pytest.mark.governance
@@ -129,6 +138,25 @@ class TestComplianceRequirements:
         audit_entries = integration.inspect_audit_trail(limit=1)
         assert audit_entries[0]["context"]["password"] == "***REDACTED***"
         assert audit_entries[0]["context"]["api_key"] == "***REDACTED***"
+
+    def test_shipped_constitution_uses_only_enforced_keys(self):
+        """The shipped constitution loads and every rule/validation key is known.
+
+        Reads the raw YAML, so loader-injected keys (_compiled_pattern) cannot
+        mask an unknown key.
+        """
+        config = (
+            Path(__file__).resolve().parents[2] / "config" / "governance_rules.yaml"
+        )
+        raw_rules = yaml.safe_load(config.read_text())["rules"]
+
+        engine = RulesEngine(str(config))
+
+        assert engine.load_error is None
+        assert len(engine.rules) == len(raw_rules)
+        for rule in raw_rules:
+            assert set(rule) <= ALLOWED_RULE_KEYS, rule["id"]
+            assert set(rule.get("validation", {})) <= ALLOWED_VALIDATION_KEYS
 
     def test_governance_status_reporting(self, sample_governance_rules):
         """Test governance framework status can be queried."""

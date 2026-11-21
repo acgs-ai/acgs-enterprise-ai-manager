@@ -9,6 +9,19 @@ from datetime import datetime
 from uuid import UUID
 from decimal import Decimal
 
+# Single source for task status values; services and reports import these.
+TASK_STATUS_DONE = "done"
+TASK_STATUS_CANCELLED = "cancelled"
+TASK_STATUSES = (
+    "todo",
+    "in_progress",
+    "blocked",
+    "review",
+    TASK_STATUS_DONE,
+    TASK_STATUS_CANCELLED,
+)
+TASK_STATUS_PATTERN = f"^({'|'.join(TASK_STATUSES)})$"
+
 
 # Base schemas
 class TaskBase(BaseModel):
@@ -16,9 +29,7 @@ class TaskBase(BaseModel):
 
     title: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
-    status: str = Field(
-        default="todo", pattern="^(todo|in_progress|blocked|review|done|cancelled)$"
-    )
+    status: str = Field(default="todo", pattern=TASK_STATUS_PATTERN)
     priority: str = Field(default="medium", pattern="^(low|medium|high|urgent)$")
     assignee_id: Optional[UUID] = None
     project_id: Optional[UUID] = None
@@ -39,9 +50,7 @@ class TaskUpdate(BaseModel):
 
     title: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
-    status: Optional[str] = Field(
-        None, pattern="^(todo|in_progress|blocked|review|done|cancelled)$"
-    )
+    status: Optional[str] = Field(None, pattern=TASK_STATUS_PATTERN)
     priority: Optional[str] = Field(None, pattern="^(low|medium|high|urgent)$")
     assignee_id: Optional[UUID] = None
     project_id: Optional[UUID] = None
@@ -120,9 +129,7 @@ class TaskDetailResponse(TaskResponse):
 class TaskFilter(BaseModel):
     """Schema for filtering tasks."""
 
-    status: Optional[str] = Field(
-        None, pattern="^(todo|in_progress|blocked|review|done|cancelled)$"
-    )
+    status: Optional[str] = Field(None, pattern=TASK_STATUS_PATTERN)
     priority: Optional[str] = Field(None, pattern="^(low|medium|high|urgent)$")
     assignee_id: Optional[UUID] = None
     project_id: Optional[UUID] = None

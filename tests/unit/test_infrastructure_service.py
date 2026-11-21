@@ -1,11 +1,10 @@
 """Unit tests for InfrastructureService and infrastructure schemas (mocked AsyncSession)."""
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
 from pydantic import ValidationError
-from sqlalchemy.dialects import postgresql
 
 from backend.models.infrastructure import Infrastructure
 from backend.schemas.infrastructure import (
@@ -15,28 +14,7 @@ from backend.schemas.infrastructure import (
     InfrastructureUpdate,
 )
 from backend.services.infrastructure_service import InfrastructureService
-
-
-def _sql(stmt):
-    compiled = stmt.compile(dialect=postgresql.dialect())
-    return str(compiled), compiled.params
-
-
-def _result(one=None, items=None, scalar=None):
-    r = MagicMock()
-    r.scalar_one_or_none.return_value = one
-    r.scalars.return_value.all.return_value = items or []
-    r.scalar.return_value = scalar
-    return r
-
-
-@pytest.fixture
-def db():
-    session = MagicMock()
-    session.add = MagicMock()
-    for name in ("commit", "refresh", "delete", "execute", "flush"):
-        setattr(session, name, AsyncMock())
-    return session
+from tests.unit.conftest import compile_sql, make_result
 
 
 @pytest.mark.unit
@@ -104,7 +82,7 @@ class TestSchemas:
 @pytest.mark.unit
 @pytest.mark.asyncio
 class TestCreateGetDelete:
-    async def test_create_sets_fields_and_commits(self, db):
+    async def test_create_sets_fields_and_commits(self, mock_db):
         data = InfrastructureCreate(
             name="db1",
             type="database",
@@ -112,7 +90,7 @@ class TestCreateGetDelete:
             dependencies=["net"],
             capacity={"cpu": 4},
         )
-        infra = await InfrastructureService.create_infrastructure(db, data)
+        infra = await InfrastructureService.create_infrastructure(mock_db, data)
         assert isinstance(infra, Infrastructure)
         assert (infra.name, infra.type, infra.status) == (
             "db1",
@@ -120,136 +98,143 @@ class TestCreateGetDelete:
             "operational",
         )
         assert infra.dependencies == ["net"] and infra.capacity == {"cpu": 4}
-        db.add.assert_called_once_with(infra)
-        db.commit.assert_awaited_once()
-        db.refresh.assert_awaited_once_with(infra, ["tasks"])
+        mock_db.add.assert_called_once_with(infra)
+        mock_db.commit.assert_awaited_once()
+        mock_db.refresh.assert_awaited_once_with(infra, ["tasks"])
 
-    async def test_get_found_and_filters_by_id(self, db):
+    async def test_get_found_and_filters_by_id(self, mock_db):
         obj = Infrastructure(name="a", type="compute")
-        db.execute.return_value = _result(one=obj)
+        mock_db.execute.return_value = make_result(scalar_one_or_none=obj)
         iid = uuid4()
-        assert await InfrastructureService.get_infrastructure(db, iid) is obj
-        sql, params = _sql(db.execute.call_args.args[0])
+        assert await InfrastructureService.get_infrastructure(mock_db, iid) is obj
+        sql, params = compile_sql(mock_db.execute.call_args.args[0])
         assert "WHERE infrastructure.id" in sql
         assert iid in params.values()
 
-    async def test_get_not_found_returns_none(self, db):
-        db.execute.return_value = _result(one=None)
-        assert await InfrastructureService.get_infrastructure(db, uuid4()) is None
+    async def test_get_not_found_returns_none(self, mock_db):
+        mock_db.execute.return_value = make_result(scalar_one_or_none=None)
+        assert await InfrastructureService.get_infrastructure(mock_db, uuid4()) is None
 
-    async def test_delete_found(self, db):
+    async def test_delete_found(self, mock_db):
         obj = Infrastructure(name="a", type="compute")
-        db.execute.return_value = _result(one=obj)
-        assert await InfrastructureService.delete_infrastructure(db, uuid4()) is True
-        db.delete.assert_awaited_once_with(obj)
-        db.commit.assert_awaited_once()
+        mock_db.execute.return_value = make_result(scalar_one_or_none=obj)
+        assert (
+            await InfrastructureService.delete_infrastructure(mock_db, uuid4()) is True
+        )
+        mock_db.delete.assert_awaited_once_with(obj)
+        mock_db.commit.assert_awaited_once()
 
-    async def test_delete_missing_does_not_touch_db(self, db):
-        db.execute.return_value = _result(one=None)
-        assert await InfrastructureService.delete_infrastructure(db, uuid4()) is False
-        db.delete.assert_not_awaited()
-        db.commit.assert_not_awaited()
+    async def test_delete_missing_does_not_touch_db(self, mock_db):
+        mock_db.execute.return_value = make_result(scalar_one_or_none=None)
+        assert (
+            await InfrastructureService.delete_infrastructure(mock_db, uuid4()) is False
+        )
+        mock_db.delete.assert_not_awaited()
+        mock_db.commit.assert_not_awaited()
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
 class TestUpdate:
-    async def test_partial_update_only_set_fields(self, db):
+    async def test_partial_update_only_set_fields(self, mock_db):
         obj = Infrastructure(
             name="old", type="compute", status="operational", location="us"
         )
-        db.execute.return_value = _result(one=obj)
+        mock_db.execute.return_value = make_result(scalar_one_or_none=obj)
         out = await InfrastructureService.update_infrastructure(
-            db, uuid4(), InfrastructureUpdate(status="degraded")
+            mock_db, uuid4(), InfrastructureUpdate(status="degraded")
         )
         assert out is obj
         assert obj.status == "degraded"
         assert obj.name == "old" and obj.location == "us"
-        db.commit.assert_awaited_once()
-        db.refresh.assert_awaited_once_with(obj, ["tasks"])
+        mock_db.commit.assert_awaited_once()
+        mock_db.refresh.assert_awaited_once_with(obj, ["tasks"])
 
-    async def test_explicit_none_clears_field(self, db):
+    async def test_explicit_none_clears_field(self, mock_db):
         obj = Infrastructure(name="old", type="compute", location="us")
-        db.execute.return_value = _result(one=obj)
+        mock_db.execute.return_value = make_result(scalar_one_or_none=obj)
         await InfrastructureService.update_infrastructure(
-            db, uuid4(), InfrastructureUpdate(location=None)
+            mock_db, uuid4(), InfrastructureUpdate(location=None)
         )
         assert obj.location is None
 
-    async def test_empty_update_changes_nothing(self, db):
+    async def test_empty_update_changes_nothing(self, mock_db):
         obj = Infrastructure(name="old", type="compute")
-        db.execute.return_value = _result(one=obj)
+        mock_db.execute.return_value = make_result(scalar_one_or_none=obj)
         await InfrastructureService.update_infrastructure(
-            db, uuid4(), InfrastructureUpdate()
+            mock_db, uuid4(), InfrastructureUpdate()
         )
         assert obj.name == "old"
 
-    async def test_update_missing_returns_none_no_commit(self, db):
-        db.execute.return_value = _result(one=None)
+    async def test_update_missing_returns_none_no_commit(self, mock_db):
+        mock_db.execute.return_value = make_result(scalar_one_or_none=None)
         out = await InfrastructureService.update_infrastructure(
-            db, uuid4(), InfrastructureUpdate(name="x")
+            mock_db, uuid4(), InfrastructureUpdate(name="x")
         )
         assert out is None
-        db.commit.assert_not_awaited()
+        mock_db.commit.assert_not_awaited()
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
 class TestList:
-    async def test_no_filters_pagination_and_total(self, db):
+    async def test_no_filters_pagination_and_total(self, mock_db):
         items = [Infrastructure(name="a", type="compute")]
-        db.execute.side_effect = [_result(scalar=7), _result(items=items)]
+        mock_db.execute.side_effect = [
+            make_result(scalar=7),
+            make_result(scalars=items),
+        ]
         out, total = await InfrastructureService.list_infrastructure(
-            db, page=3, page_size=10
+            mock_db, page=3, page_size=10
         )
         assert out == items and total == 7
-        count_sql, _ = _sql(db.execute.call_args_list[0].args[0])
+        count_sql, _ = compile_sql(mock_db.execute.call_args_list[0].args[0])
         assert "count(*)" in count_sql
-        sql, params = _sql(db.execute.call_args_list[1].args[0])
+        sql, params = compile_sql(mock_db.execute.call_args_list[1].args[0])
         assert "WHERE" not in sql
         assert "ORDER BY infrastructure.created_at DESC" in sql
         assert sorted(params.values()) == [10, 20]  # limit=10, offset=20
 
-    async def test_all_filters_applied(self, db):
-        db.execute.side_effect = [_result(scalar=0), _result()]
+    async def test_all_filters_applied(self, mock_db):
+        mock_db.execute.side_effect = [make_result(scalar=0), make_result()]
         f = InfrastructureFilter(
             type="storage", status="down", location="eu", search="web"
         )
-        out, total = await InfrastructureService.list_infrastructure(db, filters=f)
+        out, total = await InfrastructureService.list_infrastructure(mock_db, filters=f)
         assert out == [] and total == 0
-        sql, params = _sql(db.execute.call_args_list[1].args[0])
+        sql, params = compile_sql(mock_db.execute.call_args_list[1].args[0])
         for col in ("type", "status", "location", "name"):
             assert f"infrastructure.{col}" in sql
         assert "storage" in params.values() and "down" in params.values()
         assert "%eu%" in params.values() and "%web%" in params.values()
         # filters also scope the count query
-        count_sql, _ = _sql(db.execute.call_args_list[0].args[0])
+        count_sql, _ = compile_sql(mock_db.execute.call_args_list[0].args[0])
         assert "infrastructure.type" in count_sql
 
-    async def test_empty_filter_object_adds_no_where(self, db):
-        db.execute.side_effect = [_result(scalar=0), _result()]
+    async def test_empty_filter_object_adds_no_where(self, mock_db):
+        mock_db.execute.side_effect = [make_result(scalar=0), make_result()]
         await InfrastructureService.list_infrastructure(
-            db, filters=InfrastructureFilter()
+            mock_db, filters=InfrastructureFilter()
         )
-        sql, _ = _sql(db.execute.call_args_list[1].args[0])
+        sql, _ = compile_sql(mock_db.execute.call_args_list[1].args[0])
         assert "WHERE" not in sql
 
-    async def test_returns_list_type(self, db):
-        db.execute.side_effect = [
-            _result(scalar=1),
-            _result(items=(Infrastructure(name="a", type="compute"),)),
+    async def test_returns_list_type(self, mock_db):
+        mock_db.execute.side_effect = [
+            make_result(scalar=1),
+            make_result(scalars=(Infrastructure(name="a", type="compute"),)),
         ]
-        out, _ = await InfrastructureService.list_infrastructure(db)
+        out, _ = await InfrastructureService.list_infrastructure(mock_db)
         assert isinstance(out, list)
 
-    async def test_search_also_matches_configuration(self, db):
-        db.execute.side_effect = [_result(scalar=0), _result()]
+    async def test_search_also_matches_configuration(self, mock_db):
+        mock_db.execute.side_effect = [make_result(scalar=0), make_result()]
         await InfrastructureService.list_infrastructure(
-            db, filters=InfrastructureFilter(search="x")
+            mock_db, filters=InfrastructureFilter(search="x")
         )
         # Count and list queries both match name OR configuration (as text).
-        for call in db.execute.call_args_list:
-            where = _sql(call.args[0])[0].split("WHERE")[1]
+        for call in mock_db.execute.call_args_list:
+            where = compile_sql(call.args[0])[0].split("WHERE")[1]
             assert "infrastructure.name ILIKE" in where
             assert " OR " in where
             assert "CAST(infrastructure.configuration AS VARCHAR) ILIKE" in where

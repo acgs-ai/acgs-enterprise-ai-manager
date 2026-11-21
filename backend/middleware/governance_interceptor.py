@@ -58,6 +58,19 @@ class GovernanceMiddleware(BaseHTTPMiddleware):
         )
 
         if is_ai_operation:
+            # The audited actor is the verified user set by AuthMiddleware,
+            # never a client header. AuthMiddleware already guarantees it;
+            # without it, refuse rather than validate as an unknown actor.
+            user = getattr(request.state, "user", None)
+            agent_id = user.get("id") if isinstance(user, dict) else None
+            if not agent_id:
+                logger.error(f"Governance refused {path}: no verified user")
+                return JSONResponse(
+                    status_code=403,
+                    content={"detail": "Operation blocked by governance rules"},
+                )
+            agent_id = str(agent_id)
+
             # Extract operation details from request
             operation_context = await self._extract_operation_context(request)
 
@@ -66,7 +79,8 @@ class GovernanceMiddleware(BaseHTTPMiddleware):
             validation_result = governance.validate_operation(
                 operation=operation_context.get("operation", "unknown"),
                 context=operation_context,
-                agent_id=operation_context.get("agent_id", "default"),
+                agent_id=agent_id,
+                stage="request",
             )
 
             # Enforce governance decision
@@ -90,7 +104,7 @@ class GovernanceMiddleware(BaseHTTPMiddleware):
                 approval_request = governance.request_approval(
                     operation=operation_context.get("operation", "unknown"),
                     context=operation_context,
-                    agent_id=operation_context.get("agent_id", "default"),
+                    agent_id=agent_id,
                 )
 
                 return JSONResponse(
@@ -132,9 +146,10 @@ class GovernanceMiddleware(BaseHTTPMiddleware):
             "operation": f"{request.method} {request.url.path}",
         }
 
-        # Extract user/agent ID from headers or auth
+        # Client-claimed agent id: UNTRUSTED, recorded for forensics only.
+        # The audited actor is the verified user (see dispatch).
         if "X-Agent-ID" in request.headers:
-            context["agent_id"] = request.headers["X-Agent-ID"]
+            context["claimed_agent_id"] = request.headers["X-Agent-ID"]
 
         # Extract request body for POST/PUT/PATCH
         if request.method in ["POST", "PUT", "PATCH"]:
@@ -142,6 +157,15 @@ class GovernanceMiddleware(BaseHTTPMiddleware):
                 body = await request.body()
                 if body:
                     context["request_body"] = json.loads(body.decode())
+                    # Batch size for bulk-operations: without it the check
+                    # would fail closed on every batch, and with it an
+                    # oversized batch is blocked instead of passing as 0.
+                    if isinstance(context["request_body"], dict) and isinstance(
+                        context["request_body"].get("entity_ids"), list
+                    ):
+                        context["batch_size"] = len(
+                            context["request_body"]["entity_ids"]
+                        )
             except Exception as e:
                 logger.warning(f"Failed to parse request body: {e}")
 

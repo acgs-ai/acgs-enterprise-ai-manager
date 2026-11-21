@@ -12,13 +12,7 @@ from fastapi.testclient import TestClient
 
 import backend.governance.acgs_integration as acgs_integration
 from backend.main import app
-from tests.integration.test_api_auth import (  # noqa: F401  (fixtures)
-    _bearer,
-    auth_env,
-    db_calls,
-    make_token,
-    rsa_keys,
-)
+from tests.integration._auth_helpers import _bearer
 
 pytestmark = [pytest.mark.integration, pytest.mark.governance]
 
