@@ -249,6 +249,9 @@ reports a blocking violation, the operation is blocked.
 - `BLOCK` rules become acgs-lite `block` rules. `REQUIRE_APPROVAL`, `VALIDATE`,
   `AUDIT` and `PROTECT` become `warn`: RulesEngine enforces them, and acgs-lite
   cannot express approval gates or context thresholds.
+- `applies_to` stage scoping (`request` / `output`) applies to the acgs-lite
+  layer as well: violations from rules scoped to another stage are filtered out
+  when `validate_operation(..., stage=...)` runs.
 - A `pattern` maps only if it is an alternation of plain literals
   (`harm|kill|rm -rf`), which becomes the keyword list. acgs-lite's heuristics
   can skip a keyword hit (e.g. when the action starts with "run" or

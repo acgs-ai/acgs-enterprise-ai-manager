@@ -52,6 +52,7 @@ _ACGS_SEVERITIES = {
     "MEDIUM": "medium",
     "LOW": "low",
 }
+_VALID_STAGES = frozenset({"request", "output"})
 # One alternative of an app pattern that is a plain literal (no regex syntax),
 # so it maps exactly to an acgs-lite keyword (case-insensitive substring).
 _LITERAL_ALTERNATIVE = re.compile(r"[A-Za-z0-9_]+(?:[ \-]+[A-Za-z0-9_]+)*")
@@ -114,6 +115,19 @@ def build_acgs_constitution(constitution_path: str) -> "Constitution":
         if not all(_LITERAL_ALTERNATIVE.fullmatch(k) for k in keywords):
             raise ValueError(f"rule {rule_id}: pattern is not a literal alternation")
 
+        rule_metadata: Dict[str, Any] = {"app_action": action}
+        if "applies_to" in rule:
+            applies_to = rule.get("applies_to")
+            if (
+                not isinstance(applies_to, list)
+                or not applies_to
+                or not all(
+                    isinstance(s, str) and s in _VALID_STAGES for s in applies_to
+                )
+            ):
+                raise ValueError(f"rule {rule_id}: invalid applies_to {applies_to!r}")
+            rule_metadata["applies_to"] = list(applies_to)
+
         acgs_rules.append(
             {
                 "id": rule_id,
@@ -122,7 +136,7 @@ def build_acgs_constitution(constitution_path: str) -> "Constitution":
                 "keywords": keywords,
                 "workflow_action": ViolationAction(_ACGS_WORKFLOW_ACTIONS[action]),
                 "category": str(rule.get("maci_phase", "general")).lower(),
-                "metadata": {"app_action": action},
+                "metadata": rule_metadata,
             }
         )
 
@@ -183,6 +197,7 @@ class ACGSIntegration:
         # installed but unbuildable is an error and sets acgs_init_error.
         self.acgs_engine = None
         self.acgs_init_error: Optional[str] = None
+        self._acgs_rule_stages: Dict[str, frozenset[str]] = {}
         if ACGS_AVAILABLE:
             self._initialize_acgs_engine()
         elif ACGS_IMPORT_ERROR is not None:
@@ -198,17 +213,30 @@ class ACGSIntegration:
             # strict=False: blocking violations come back in the result
             # instead of raising, so validate_operation reports them.
             self.acgs_engine = GovernanceEngine(constitution, strict=False)
+            self._acgs_rule_stages = {
+                r.id: frozenset(r.metadata["applies_to"])
+                for r in getattr(constitution, "rules", ())
+                if isinstance(getattr(r, "metadata", None), dict)
+                and r.metadata.get("applies_to")
+            }
 
             logger.info(
                 f"ACGS governance engine initialized with constitution: {self.constitution_path}"
             )
         except Exception as e:
             self.acgs_engine = None
+            self._acgs_rule_stages = {}
             self.acgs_init_error = f"{type(e).__name__}: {e}"
             logger.error(
                 f"Failed to initialize ACGS engine from {self.constitution_path}: "
                 f"{self.acgs_init_error}"
             )
+
+    def _acgs_rule_applies(self, rule_id: str, stage: Optional[str]) -> bool:
+        """Return True when an acgs-lite rule applies to the requested stage."""
+        if stage is None or rule_id not in self._acgs_rule_stages:
+            return True
+        return stage in self._acgs_rule_stages[rule_id]
 
     def validate_operation(
         self,
@@ -248,23 +276,30 @@ class ACGSIntegration:
                 acgs_result = self.acgs_engine.validate(
                     operation, agent_id=agent_id, context=context
                 )
-                # Merge results (fail-closed: if either fails, operation is blocked)
+                # Merge results (fail-closed: if either fails, operation is blocked),
+                # respecting rule applies_to stage scoping when stage is specified.
                 if not acgs_result.valid:
-                    validation_result["valid"] = False
-                    validation_result["violations"].extend(
-                        [
-                            {
-                                "rule_id": v.rule_id,
-                                "severity": str(
-                                    getattr(v.severity, "value", v.severity)
-                                ).upper(),
-                                "description": v.rule_text,
-                                "action": "BLOCK",
-                                "source": "acgs-lite",
-                            }
-                            for v in acgs_result.violations
-                        ]
-                    )
+                    applicable_violations = [
+                        v
+                        for v in acgs_result.violations
+                        if self._acgs_rule_applies(v.rule_id, stage)
+                    ]
+                    if applicable_violations or not acgs_result.violations:
+                        validation_result["valid"] = False
+                        validation_result["violations"].extend(
+                            [
+                                {
+                                    "rule_id": v.rule_id,
+                                    "severity": str(
+                                        getattr(v.severity, "value", v.severity)
+                                    ).upper(),
+                                    "description": v.rule_text,
+                                    "action": "BLOCK",
+                                    "source": "acgs-lite",
+                                }
+                                for v in applicable_violations
+                            ]
+                        )
             except Exception as e:
                 logger.error(f"ACGS validation error: {e}")
                 if self.fail_closed:
