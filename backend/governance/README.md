@@ -211,6 +211,28 @@ error details go to `load_error` and the log, never to API responses):
 - a rule has an unknown `action` (e.g. `BLOK`)
 - a rule's `pattern` or `context_pattern` is not a valid regex
 
+### acgs-lite Layer
+
+When `acgs-lite` is installed, `build_acgs_constitution()` converts the same
+file into an acgs-lite constitution (the YAML is never rewritten) and every
+operation is also checked by `GovernanceEngine(strict=False)`. If either layer
+reports a blocking violation, the operation is blocked.
+
+- `BLOCK` rules become acgs-lite `block` rules. `REQUIRE_APPROVAL`, `VALIDATE`,
+  `AUDIT` and `PROTECT` become `warn`: RulesEngine enforces them, and acgs-lite
+  cannot express approval gates or context thresholds.
+- A `pattern` maps only if it is an alternation of plain literals
+  (`harm|kill|rm -rf`), which becomes the keyword list. acgs-lite's heuristics
+  can skip a keyword hit (e.g. when the action starts with "run" or
+  "generate"), so this layer is defense in depth, not a replacement.
+- If acgs-lite is installed but the engine cannot be built (missing file,
+  regex syntax in a pattern, `context_key`/`context_pattern`, unknown
+  action/severity), it is logged at error level and, with `fail_closed=True`,
+  every operation is blocked with a generic `acgs-engine-unavailable`
+  violation. With `fail_closed=False`, RulesEngine decides alone and a
+  warning is logged.
+- If acgs-lite is not installed, RulesEngine runs alone (fallback mode).
+
 ### Enforcement Configuration
 
 Mirrors `config/governance_rules.yaml`:
